@@ -1,0 +1,39 @@
+id = "S40"
+title = "Feature leak in the fraud model"
+seed = "k7_feature_leak"
+base_branch = "test/s40-seed-feature-leak"
+twin_branch = "feat/{key_lower}-chargeback-history-feature"
+pr_title = "{KEY}: add chargeback history to the fraud score"
+twin = "Theo"
+author = "scripted"
+
+[ticket]
+type = "Story"
+points = 5
+summary = "Add chargeback history to the fraud score, using past data only"
+acceptance_criteria = """
+AC1 | Every feature uses only data from before the transaction time | test_passes(test_{TOKEN}_features_use_past_only)
+AC2 | Holdout PR-AUC on days 61-90 is at least 0.25 | metric_at_least(pr_auc, 0.25)
+AC3 | Holdout AUC is at most 0.95; a higher value points to a leak | metric_at_most(auc, 0.95)
+"""
+
+# Theo claims the model is ready, but the chargeback window still reaches 30 days past the
+# transaction. The past-only test fails and the holdout AUC is above 0.98 (too good).
+[[attempts]]
+name = "v1"
+commit = "test(fraud): add acceptance tests for the chargeback history feature"
+claim = "model ready"
+steps = [
+  { add_test = "scenarios/S40/test_fraud_features.py.tmpl", dest = "tests/test_{token}_fraud_features.py" },
+]
+
+# Nora ends the window at the transaction time. AUC falls back to about 0.89.
+[[attempts]]
+name = "v2"
+twin = "Nora"
+commit = "fix(fraud): end the chargeback window at the transaction time"
+claim = "fixed"
+steps = [
+  { revert_seed = true },
+  { add_test = "scenarios/S40/test_fraud_features.py.tmpl", dest = "tests/test_{token}_fraud_features.py" },
+]

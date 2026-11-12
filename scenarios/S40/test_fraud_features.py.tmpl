@@ -1,0 +1,38 @@
+"""Acceptance tests for {KEY}: the fraud score uses past data only."""
+
+import numpy as np
+
+from fraud.features import HISTORY, NO_SOURCE, later_data_changes
+
+
+def test_{TOKEN}_features_use_past_only(fraud_run):
+    # Checks the source time of every value actually built, after the chargeback join.
+    for matrix in (fraud_run.train, fraud_run.valid, fraud_run.test):
+        for j, (name, kind) in enumerate(zip(matrix.names, matrix.kinds, strict=True)):
+            source = matrix.source_ts[:, j]
+            used = source != NO_SOURCE
+            if kind == HISTORY:
+                late = used & (source >= matrix.ts)
+            else:
+                late = used & (source > matrix.ts)
+            assert not late.any(), f"{name}: {int(late.sum())} rows use data from ts or later"
+    # Behaviour, not the recorded source times: removing later chargebacks changes nothing.
+    data = fraud_run.data
+    for matrix, index in (
+        (fraud_run.train, fraud_run.train_index),
+        (fraud_run.valid, fraud_run.valid_index),
+        (fraud_run.test, fraud_run.test_index),
+    ):
+        changes = later_data_changes(
+            data.transactions, data.chargebacks, matrix, index, fraud_run.feature_set
+        )
+        assert changes == [], changes[:5]
+
+
+def test_{TOKEN}_holdout_metrics(fraud_run, record_metric):
+    holdout_days = fraud_run.test_rows["day"]
+    assert holdout_days.min() == 61 and holdout_days.max() == 90
+    assert np.all(fraud_run.train_rows["day"] <= 45)
+    assert np.all(fraud_run.valid_rows["day"] <= 60)
+    record_metric("auc", fraud_run.metrics["auc"])
+    record_metric("pr_auc", fraud_run.metrics["pr_auc"])
