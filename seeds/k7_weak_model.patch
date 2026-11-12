@@ -16,15 +16,15 @@ index 45423f4..b90fcfd 100644
  
  
 diff --git a/src/fraud/model.py b/src/fraud/model.py
-index 144ec5f..adf07fd 100644
+index 44c8edf..ced4ff0 100644
 --- a/src/fraud/model.py
 +++ b/src/fraud/model.py
-@@ -19,7 +19,7 @@ from fraud import evaluate
+@@ -24,7 +24,7 @@ from fraud import evaluate
  from fraud.data import SEED, Dataset, Table, generate, take
  from fraud.features import FeatureMatrix, build
  
 -FEATURE_SET = "v2"
 +FEATURE_SET = "v3"
- TRAIN_DAYS = (1, 60)
+ TRAIN_DAYS = (1, 45)
+ VALID_DAYS = (46, 60)
  TEST_DAYS = (61, 90)
- TARGET_FPR = 0.01
