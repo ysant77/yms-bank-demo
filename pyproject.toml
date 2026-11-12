@@ -5,10 +5,17 @@ description = "Synthetic demo bank service for verifier scenarios"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.5",
+    "uvicorn>=0.54.0",
+]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.8"]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8",
+    "ruff>=0.8",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -29,3 +36,5 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The test client still uses httpx; silence its upstream deprecation notice.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
