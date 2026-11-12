@@ -1,0 +1,13 @@
+diff --git a/src/bank/web/app.css b/src/bank/web/app.css
+index 141c4da..7e1383c 100644
+--- a/src/bank/web/app.css
++++ b/src/bank/web/app.css
+@@ -175,3 +175,8 @@ select {
+   .table td { padding: 6px 4px; font-size: 0.9rem; }
+   .hide-small { display: none; }
+ }
++
++@media (max-width: 430px) {
++  .topbar { padding: 10px 12px; }
++  .form-actions #send-button { display: none; }
++}
