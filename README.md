@@ -1,6 +1,6 @@
-# ledger-demo
+# YMS Bank demo (`ledger-demo`)
 
-YMS Bank is a small demo bank: customers, accounts, a double-entry ledger, transfers and
+YMS Bank is a fictional, small demo bank: customers, accounts, a double-entry ledger, transfers and
 statements, with a plain web front end. It is a test target for a verifier that checks
 developers' claims in an issue tracker against CI results.
 

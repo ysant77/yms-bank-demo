@@ -164,3 +164,17 @@ def test_sql_operations_ignore_comments_and_clauses():
 
 def test_record_metric_fixture_is_available(record_metric):
     assert callable(record_metric)
+
+
+def test_audit_vulnerabilities_counts_pip_audit_json(tmp_path):
+    from bank.testing.ci_report import audit_vulnerabilities
+
+    report = tmp_path / "audit.json"
+    report.write_text(
+        '{"dependencies": [{"name": "a", "version": "1", "vulns": [{"id": "X-1"}, {"id": "X-2"}]},'
+        ' {"name": "b", "version": "2", "vulns": []}]}',
+        encoding="utf-8",
+    )
+    assert audit_vulnerabilities(str(report)) == 2
+    assert audit_vulnerabilities(str(tmp_path / "missing.json")) is None
+    assert audit_vulnerabilities(None) is None

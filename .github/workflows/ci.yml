@@ -14,16 +14,27 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+      - name: Dependency audit
+        if: ${{ !cancelled() }}
+        run: |
+          uv export --locked --no-hashes --no-emit-project --format requirements-txt -q > requirements-audit.txt
+          if ! uvx --from 'pip-audit==2.9.0' pip-audit -r requirements-audit.txt --no-deps --disable-pip \
+               --format json -o audit.json; then
+            echo "AUDIT_FAILED=1" >> "$GITHUB_ENV"
+          fi
       - name: Test run with CI report (benchmarks included)
         if: ${{ !cancelled() }}
         env:
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_AUDIT_JSON: audit.json
         run: uv run pytest -q -m "bench or not bench" --ci-report=ci-report.json
       - name: Upload CI report
         if: ${{ !cancelled() }}
@@ -32,6 +43,64 @@ jobs:
           name: ci-report
           path: ci-report.json
           if-no-files-found: error
+      - name: Fail on known vulnerabilities
+        if: ${{ env.AUDIT_FAILED == '1' }}
+        run: |
+          echo "The dependency audit found known vulnerabilities (see audit step)."
+          exit 1
+
+  # Posts the report on the pull request. Runs no repository code.
+  report:
+    if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-report
+      - name: Comment the CI report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo '<!-- aat-ci-report -->'
+            echo '```json'
+            cat ci-report.json
+            echo
+            echo '```'
+          } > comment.md
+          gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+
+  # Publishes the default branch report to the ci-reports branch as main.json.
+  publish-main-report:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !cancelled() }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-report
+      - name: Write main.json on the ci-reports branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh api "repos/$REPO/branches/ci-reports" > /dev/null 2>&1; then
+            gh api "repos/$REPO/git/refs" -f ref=refs/heads/ci-reports -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          sha=$(gh api "repos/$REPO/contents/main.json?ref=ci-reports" --jq .sha 2>/dev/null || true)
+          args=(-X PUT "repos/$REPO/contents/main.json" -f branch=ci-reports
+                -f message="ci: report for main at $GITHUB_SHA" -f content="$(base64 -w0 ci-report.json)")
+          if [ -n "$sha" ]; then args+=(-f sha="$sha"); fi
+          gh api "${args[@]}" > /dev/null
 
   secrets:
     runs-on: ubuntu-latest
@@ -40,6 +109,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -12,3 +12,6 @@ dist/
 .private-names
 .DS_Store
 ci-report.json
+requirements-audit.txt
+audit.json
+ci-report.json

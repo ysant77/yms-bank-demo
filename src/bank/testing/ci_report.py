@@ -111,6 +111,14 @@ def git_sha(root: Path, ref: str) -> str | None:
     return out.stdout.strip() or None
 
 
+def audit_vulnerabilities(path: str | None) -> int | None:
+    """Count known vulnerabilities in a pip-audit JSON report, if one was produced."""
+    if not path or not Path(path).is_file():
+        return None
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return sum(len(dep.get("vulns", [])) for dep in data.get("dependencies", []))
+
+
 class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
@@ -140,6 +148,9 @@ class Collector:
     def build(self, root: Path) -> dict[str, object]:
         base_ref = os.environ.get("CI_BASE_REF", "main")
         tests = [dict(t, outcome=t["outcome"] or "error") for t in self.tests.values()]
+        vulns = audit_vulnerabilities(os.environ.get("CI_AUDIT_JSON"))
+        if vulns is not None:
+            self.metrics["audit_vulns"] = vulns
         return {
             "schema": SCHEMA,
             "repository": os.environ.get("GITHUB_REPOSITORY") or f"local/{root.name}",
