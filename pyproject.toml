@@ -36,5 +36,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["-p", "bank.testing.ci_report", "--strict-markers", "-m", "not bench"]
+markers = ["bench: throughput benchmarks, excluded by default; run with -m bench"]
 # The test client still uses httpx; silence its upstream deprecation notice.
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

@@ -11,3 +11,4 @@ dist/
 .env.*
 .private-names
 .DS_Store
+ci-report.json
