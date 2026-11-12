@@ -369,22 +369,6 @@ def break_step(repo, old='old = "broken"', new='old = "absent"'):
     git(repo, "commit", "-q", "-am", "chore: break the step")
 
 
-def test_a_file_marked_assume_unchanged_is_refused_and_kept(demo_repo):
-    (demo_repo / "notes.txt").write_text("local edit\n")
-    git(demo_repo, "update-index", "--assume-unchanged", "notes.txt")
-    assert scenario.main(["base", "S98", "--from", "main"]) == 2
-    assert (demo_repo / "notes.txt").read_text() == "local edit\n"
-    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
-
-
-def test_untracked_files_hidden_by_settings_are_seen(demo_repo):
-    git(demo_repo, "config", "status.showUntrackedFiles", "no")
-    (demo_repo / "checks").mkdir()
-    (demo_repo / "checks" / "mine.txt").write_text("user file\n")
-    assert scenario.main(["base", "S98", "--from", "main"]) == 2
-    assert (demo_repo / "checks" / "mine.txt").read_text() == "user file\n"
-
-
 def test_an_ignored_file_at_a_test_destination_is_not_overwritten(demo_repo):
     assert scenario.main(["base", "S98", "--from", "main"]) == 0
     git(demo_repo, "switch", "-q", "main")
@@ -396,8 +380,9 @@ def test_an_ignored_file_at_a_test_destination_is_not_overwritten(demo_repo):
     git(demo_repo, "switch", "-q", "main")
     (demo_repo / "checks").mkdir()
     (demo_repo / "checks" / "bank9.txt").write_text("ignored user file\n")
-    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
     assert (demo_repo / "checks" / "bank9.txt").read_text() == "ignored user file\n"
+    assert git(demo_repo, "show", "fix/bank-9-demo:checks/bank9.txt") == "check for BANK-9\n"
     assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
 
 
@@ -456,23 +441,20 @@ def test_a_failed_step_from_a_detached_head_returns_there(demo_repo):
     assert git(demo_repo, "rev-parse", "HEAD").strip() == start
 
 
-def test_a_failed_rollback_step_stops_and_says_where_you_are(demo_repo, monkeypatch, capsys):
+def test_a_failed_branch_undo_says_so(demo_repo, monkeypatch, capsys):
     assert scenario.main(["base", "S98", "--from", "main"]) == 0
-    git(demo_repo, "switch", "-q", "main")
     break_step(demo_repo)
     real = scenario.git
 
-    def failing_switch(*args):
-        if args[:1] == ("switch",):
+    def failing_delete(*args):
+        if args[:1] == ("branch",):
             return subprocess.CompletedProcess(args, 1, "", "fatal: simulated failure")
         return real(*args)
 
-    monkeypatch.setattr(scenario, "git", failing_switch)
+    monkeypatch.setattr(scenario, "git", failing_delete)
     assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
     err = capsys.readouterr().err
-    assert "rollback incomplete: you are on branch fix/bank-9-demo; switch back failed" in err
-    # It stopped there: the created branch was not deleted.
-    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo").strip()
+    assert "rollback incomplete: could not delete the branch fix/bank-9-demo" in err
 
 
 def test_reads_use_the_branch_not_a_tag_with_the_same_name(demo_repo):
@@ -482,3 +464,131 @@ def test_reads_use_the_branch_not_a_tag_with_the_same_name(demo_repo):
     git(demo_repo, "switch", "-q", "main")
     assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
     assert git(demo_repo, "rev-parse", "fix/bank-9-demo~1").strip() == seeded
+
+
+def checkout_state(repo):
+    """Everything about the user's checkout that a run must not change."""
+    return (
+        git(repo, "rev-parse", "HEAD"),
+        git(repo, "symbolic-ref", "-q", "HEAD", check=False),
+        git(repo, "status", "--porcelain", "--untracked-files=all", "--ignored"),
+        git(repo, "diff"),
+        git(repo, "diff", "--cached"),
+    )
+
+
+def ignore(repo, pattern):
+    (repo / ".gitignore").write_text(pattern + "\n")
+    git(repo, "add", ".gitignore")
+    git(repo, "commit", "-q", "-m", "chore: ignore a path")
+
+
+def test_runs_never_touch_the_users_checkout(demo_repo):
+    (demo_repo / "notes.txt").write_text("my local edit\n")
+    git(demo_repo, "update-index", "--assume-unchanged", "notes.txt")
+    git(demo_repo, "config", "status.showUntrackedFiles", "no")
+    (demo_repo / "mine.txt").write_text("untracked user file\n")
+    before = checkout_state(demo_repo)
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    assert checkout_state(demo_repo) == before
+    assert (demo_repo / "notes.txt").read_text() == "my local edit\n"
+    assert (demo_repo / "mine.txt").read_text() == "untracked user file\n"
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def seed_adding(repo, path):
+    """A seed patch that creates ``path``."""
+    (repo / path).write_text("seeded file\n")
+    git(repo, "add", "-f", "-N", path)
+    patch = git(repo, "diff", "--", path)
+    git(repo, "rm", "-q", "--cached", path)
+    (repo / path).unlink()
+    (repo / "seeds" / "k9_demo.patch").write_text(patch)
+    git(repo, "commit", "-q", "-am", "chore: a seed that adds a file")
+
+
+def test_base_keeps_an_ignored_user_file_where_the_seed_adds_one(demo_repo):
+    ignore(demo_repo, "extra.txt")
+    seed_adding(demo_repo, "extra.txt")
+    (demo_repo / "extra.txt").write_text("ignored user file\n")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert (demo_repo / "extra.txt").read_text() == "ignored user file\n"
+    files = git(demo_repo, "show", "--name-only", "--format=", "test/s98-seed-demo").split()
+    assert files == ["extra.txt"]
+
+
+def test_revert_seed_keeps_an_ignored_user_file(demo_repo):
+    ignore(demo_repo, "extra.txt")
+    seed_adding(demo_repo, "extra.txt")
+    spec = (demo_repo / "scenarios" / "S98.toml").read_text()
+    (demo_repo / "scenarios" / "S98.toml").write_text(
+        spec.replace('steps = [ { restore = "notes.txt" } ]', "steps = [ { revert_seed = true } ]")
+    )
+    git(demo_repo, "commit", "-q", "-am", "chore: revert the seed in v2")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    (demo_repo / "extra.txt").write_text("ignored user file\n")
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    assert (demo_repo / "extra.txt").read_text() == "ignored user file\n"
+    assert "extra.txt" not in git(demo_repo, "ls-tree", "-r", "--name-only", "fix/bank-9-demo")
+
+
+def test_replace_never_edits_an_ignored_user_file(demo_repo, capsys):
+    ignore(demo_repo, "local.txt")
+    spec = (demo_repo / "scenarios" / "S98.toml").read_text()
+    (demo_repo / "scenarios" / "S98.toml").write_text(
+        spec.replace(
+            '{ replace = "notes.txt", old = "broken"', '{ replace = "local.txt", old = "broken"'
+        )
+    )
+    git(demo_repo, "commit", "-q", "-am", "chore: replace an untracked file")
+    (demo_repo / "local.txt").write_text("broken but mine\n")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert "replace: local.txt does not exist" in capsys.readouterr().err
+    assert (demo_repo / "local.txt").read_text() == "broken but mine\n"
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+
+
+def test_restore_never_writes_over_an_ignored_user_file(demo_repo):
+    ignore(demo_repo, "notes.txt.orig")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    (demo_repo / "notes.txt").write_text("user edit of a tracked file\n")
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    assert (demo_repo / "notes.txt").read_text() == "user edit of a tracked file\n"
+    assert git(demo_repo, "show", "fix/bank-9-demo:notes.txt") == "working\n"
+
+
+def test_a_non_normalised_path_and_a_tracked_symlink_are_refused(demo_repo):
+    with pytest.raises(scenario.ScenarioError):
+        scenario.safe_path("seeds/../notes.txt")
+    (demo_repo / "link.txt").symlink_to("notes.txt")
+    git(demo_repo, "add", "link.txt")
+    git(demo_repo, "commit", "-q", "-m", "chore: a tracked symlink")
+    with pytest.raises(scenario.ScenarioError):
+        scenario.safe_path("link.txt", write=True)
+
+
+def test_a_tool_name_in_the_key_is_refused(demo_repo, capsys):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "CLAUDE-3"]) == 2
+    assert "refused" in capsys.readouterr().err
+    assert git(demo_repo, "branch", "--list", "fix/*") == ""
+
+
+def test_an_interrupt_right_after_the_switch_leaves_nothing(demo_repo, monkeypatch):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    real = scenario.run
+
+    def interrupted(*args, **kwargs):
+        result = real(*args, **kwargs)
+        if args[:2] == ("git", "switch"):
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(scenario, "run", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1

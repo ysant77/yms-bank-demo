@@ -20,20 +20,23 @@ The generator refuses, before touching git:
 - a scenario file without `base_branch`, `twin_branch`, attempts or well-formed steps, and fields
   (`id`, `twin`, `title`, `pr_title`, `seed`, commit subject, claim) without their expected form;
 - any path outside the repository, inside `.git`, `.github/workflows` or `.githooks` (compared
-  case-folded), naming a folder or the repository root, or starting with `:` (pathspec magic;
-  git also runs with `GIT_LITERAL_PATHSPECS=1`);
-- a work tree with any change, including untracked files that status settings hide, and files
-  marked assume-unchanged or skip-worktree;
+  case-folded), not normalised (such as `seeds/../notes.txt`), naming a folder or the repository
+  root, or starting with `:` (pathspec magic; git also runs with `GIT_LITERAL_PATHSPECS=1`), and
+  a symbolic link as a write target;
+- an issue key or any scenario field that names an AI tool (see below);
 - attribution phrases (such as a co-author trailer or "generated with" a named tool) and a short
   list of unambiguous AI product names in any scenario field or test template. This is a guard,
   not a guarantee: it cannot recognise every name, and ordinary words are allowed on purpose.
 
-It writes a test file only where no untracked or ignored file exists, and it commits only the
-paths that the seed or the attempt's steps touched. Every refusal, a missing scenario file or a
-failed git command exits with code 2 and a line that starts with `refused:`.
+Every run works in a temporary linked worktree (`git worktree add --detach`) outside the
+repository: the branch is created or checked out there, the seed or steps are applied, the paths
+the run wrote are committed and the branch is pushed from there. Your checkout (working tree,
+index, HEAD, ignored and untracked files) is never changed, so it does not need to be clean. A
+branch that is checked out in your checkout cannot be used for an attempt; switch away first.
 
-If anything fails after the switch to the target branch and before the commit (also Ctrl-C), the
-run is rolled back: the branch moves back to its earlier tip, only the touched paths are restored
-or removed, the run returns to the branch or detached commit it started from, and the target
-branch is deleted only if this same run created it. If a rollback step fails, it stops and
-prints `rollback incomplete: you are on ...`.
+If anything fails or is interrupted (also Ctrl-C), the temporary worktree is removed, a branch
+that this run created is deleted, and an existing branch that the run moved is set back to its
+earlier tip (compare-and-swap with `git update-ref`). Nothing else is undone because nothing else
+was changed. If one of those steps fails, the script prints `rollback incomplete: ...`.
+Every refusal, a missing scenario file or a failed git command exits with code 2 and a line that
+starts with `refused:`.

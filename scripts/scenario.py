@@ -17,10 +17,11 @@ step touches must stay inside the repository and outside `.git`, `.github/workfl
 `.githooks`. Only the paths a step touched are committed. Any refusal or git failure exits
 with code 2.
 
-Rollback: if anything fails between switching to the target branch and the commit (including
-Ctrl-C), the script restores only the paths it touched, moves the branch back to its earlier
-tip, returns to where the run started, and deletes the target branch only if this run created
-it. If a rollback step fails, it stops and says where you are.
+Isolation: every run works in a temporary linked worktree (`git worktree add --detach`) outside
+the repository. Your working tree, index, HEAD and ignored files are never read for writing or
+changed. If anything fails or is interrupted (Ctrl-C), the temporary worktree is removed, a
+branch this run created is deleted, and an existing branch that the run moved is set back to
+its earlier tip. If one of those steps fails, the script says so.
 
 Usage:
   uv run python scripts/scenario.py base S01 [--from origin/main] [--push]
@@ -34,13 +35,19 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# The temporary worktree of the current run; None outside a run (reads come from ROOT).
+TREE: Path | None = None
 
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]*-[1-9][0-9]*$")
 BRANCH_RE = re.compile(r"^(test|fix|feat)/[a-z0-9][a-z0-9._-]*$")
@@ -88,15 +95,19 @@ def env() -> dict[str, str]:
     return {**os.environ, "GIT_LITERAL_PATHSPECS": "1"}
 
 
+def here() -> Path:
+    return TREE or ROOT
+
+
 def git(*args: str) -> subprocess.CompletedProcess[str]:
     """A git command that may fail; the caller checks the return code."""
-    return subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True, env=env())
+    return subprocess.run(["git", *args], cwd=here(), text=True, capture_output=True, env=env())
 
 
-def run(*args: str, capture: bool = False) -> str:
+def run(*args: str, capture: bool = False, cwd: Path | None = None) -> str:
     try:
         result = subprocess.run(
-            args, cwd=ROOT, check=True, text=True, capture_output=True, env=env()
+            args, cwd=cwd or here(), check=True, text=True, capture_output=True, env=env()
         )
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip().splitlines()[-1:] or [""]
@@ -214,23 +225,27 @@ def check_ref(ref: str, what: str) -> str:
     return ref
 
 
-def safe_path(relative: str) -> Path:
-    """A path inside the repository, outside .git, .github/workflows and .githooks."""
+def safe_path(relative: str, write: bool = False) -> Path:
+    """A normalised file path inside the current tree, outside .git, .github/workflows and
+    .githooks. A write target may not be a symbolic link."""
     if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
         raise ScenarioError(f"path must be relative to the repository: {relative!r}")
-    if relative.startswith(":") or relative.endswith("/"):
-        raise ScenarioError(f"path may not use pathspec magic or name a folder: {relative!r}")
-    path = (ROOT / relative).resolve()
-    root = ROOT.resolve()
+    if relative.startswith(":") or relative.endswith("/") or os.path.normpath(relative) != relative:
+        raise ScenarioError(f"path must be a plain normalised file path: {relative!r}")
+    tree = here()
+    path = (tree / relative).resolve()
+    root = tree.resolve()
     if not path.is_relative_to(root):
         raise ScenarioError(f"path leaves the repository: {relative!r}")
     if path == root or path.is_dir():
         raise ScenarioError(f"path must name a file, not a folder: {relative!r}")
+    if write and (tree / relative).is_symlink():
+        raise ScenarioError(f"path is a symbolic link; not written: {relative!r}")
     # Case-folded, because macOS file systems treat .GIT and .git as the same folder.
     parts = tuple(p.casefold() for p in path.relative_to(root).parts)
     if any(parts[: len(denied)] == denied for denied in DENIED_DIRS):
         raise ScenarioError(f"path is in a protected folder: {relative!r}")
-    return path
+    return tree / relative
 
 
 def tokens(key: str) -> dict[str, str]:
@@ -270,20 +285,6 @@ def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
         for path in step_paths(step, values):
             safe_path(path)
     return branch
-
-
-def ensure_clean() -> None:
-    """A clean tree, including untracked files that status settings may hide, and no file that
-    git was told to ignore changes in (assume-unchanged or skip-worktree)."""
-    if run("git", "status", "--porcelain", "--untracked-files=all", capture=True):
-        raise ScenarioError("working tree is not clean; commit or stash first")
-    flagged = [
-        line[2:]
-        for line in run("git", "ls-files", "-v", capture=True).splitlines()
-        if line and (line[0].islower() or line[0] == "S")
-    ]
-    if flagged:
-        raise ScenarioError(f"files marked assume-unchanged or skip-worktree: {flagged[:5]}")
 
 
 def seed_subject(spec: dict) -> str:
@@ -350,11 +351,13 @@ def commit(paths: list[str], message: list[str]) -> str:
     """Format, stage and commit only the given paths."""
     for path in paths:
         safe_path(path)
-    py = [p for p in paths if p.endswith(".py") and (ROOT / p).exists()]
+    py = [str(here() / p) for p in paths if p.endswith(".py") and (here() / p).exists()]
     if py:
-        run("uv", "run", "ruff", "format", "-q", "--", *py)
-        run("uv", "run", "ruff", "check", "-q", "--fix", "--", *py)
-    run("git", "add", "-A", "--", *sorted(set(paths)))
+        # The project environment lives in the main checkout; ruff reads the tree's config.
+        run("uv", "run", "ruff", "format", "-q", "--", *py, cwd=ROOT)
+        run("uv", "run", "ruff", "check", "-q", "--fix", "--", *py, cwd=ROOT)
+    # Exactly the paths the run wrote, even where an ignore rule matches them.
+    run("git", "add", "-A", "-f", "--", *sorted(set(paths)))
     args = ["git", "commit", "-q"]
     for part in message:
         args += ["-m", part]
@@ -367,7 +370,7 @@ def commit(paths: list[str], message: list[str]) -> str:
 
 def runs_dir() -> Path:
     """Run records live in the git directory, outside the work tree, so they are never staged."""
-    common = Path(run("git", "rev-parse", "--git-common-dir", capture=True))
+    common = Path(run("git", "rev-parse", "--git-common-dir", capture=True, cwd=ROOT))
     return (common if common.is_absolute() else ROOT / common) / "scenario-runs"
 
 
@@ -380,133 +383,145 @@ def write_run_record(record: dict) -> Path:
     return path
 
 
-def current_branch() -> tuple[str, bool]:
-    """Where the run starts: (branch name, False) or (commit id, True) for a detached HEAD."""
-    name = git("symbolic-ref", "--short", "-q", "HEAD").stdout.strip()
-    if name:
-        return name, False
-    return run("git", "rev-parse", "HEAD", capture=True), True
-
-
-def where() -> str:
-    name, detached = current_branch()
-    return f"detached HEAD at {name[:12]}" if detached else f"branch {name}"
-
-
-def rollback(
-    start: tuple[str, bool], branch: str, created: bool, before: str, touched: list[str]
-) -> None:
-    """Undo a failed run: only the script's own changes, then go back to where it began.
-
-    1. Move the branch back to ``before`` (its tip right after the switch), keeping files.
-    2. Restore every touched path that exists in ``before``; remove the touched paths that did
-       not exist there (the script created them: it refuses to write over a file it did not
-       create). Nothing else in the tree is touched.
-    3. Switch back to the starting branch, or detach at the starting commit.
-    4. Delete ``branch`` only if this run created it.
-    Stops at the first failed step and says where you are.
-    """
-    in_before = [p for p in touched if git("cat-file", "-e", f"{before}:{p}").returncode == 0]
-    created_paths = [p for p in touched if p not in in_before]
-    steps: list[tuple[str, list[str]]] = [("reset --soft", ["reset", "-q", "--soft", before])]
-    if in_before:
-        restore = ["restore", "-q", f"--source={before}", "--staged", "--worktree", "--"]
-        steps.append(("restore", [*restore, *in_before]))
-    if created_paths:
-        steps.append(
-            ("unstage", ["rm", "-q", "--cached", "--ignore-unmatch", "--", *created_paths])
-        )
-    name, detached = start
-    switch = ["switch", "-q", "--detach", name] if detached else ["switch", "-q", name]
-    for label, args in steps:
-        if not rollback_step(label, args):
-            return
-    for path in created_paths:
-        try:
-            (ROOT / path).unlink(missing_ok=True)
-        except OSError as exc:
+@contextmanager
+def temp_tree(start: str) -> Iterator[Path]:
+    """A temporary linked worktree, detached at ``start``, removed again whatever happens."""
+    global TREE
+    holder = Path(tempfile.mkdtemp(prefix="scenario-run-"))
+    tree = holder / "tree"
+    try:
+        run("git", "worktree", "add", "-q", "--detach", str(tree), start, cwd=ROOT)
+        TREE = tree
+        yield tree
+    finally:
+        TREE = None
+        removed = subprocess.run(
+            ["git", "worktree", "remove", "--force", str(tree)],
+            cwd=ROOT, text=True, capture_output=True, env=env(),
+        )  # fmt: skip
+        subprocess.run(["git", "worktree", "prune"], cwd=ROOT, capture_output=True, env=env())
+        shutil.rmtree(holder, ignore_errors=True)
+        if removed.returncode != 0 and tree.exists():
             print(
-                f"rollback incomplete: you are on {where()}; removing {path} failed: {exc}",
-                file=sys.stderr,
+                f"rollback incomplete: temporary worktree {tree} was not removed", file=sys.stderr
             )
-            return
-    if not rollback_step("switch back", switch):
+
+
+def branch_tip(branch: str) -> str | None:
+    found = git("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}^{{commit}}")
+    return found.stdout.strip() if found.returncode == 0 else None
+
+
+def undo_branch(branch: str, before: str | None) -> None:
+    """After a failed run: delete the branch if it did not exist before (``before`` is None),
+    or set it back to ``before`` if the run moved it. Says so if that fails."""
+    now = branch_tip(branch)
+    if now is None or now == before:
         return
-    if created:
-        rollback_step("delete created branch", ["branch", "-q", "-D", branch])
-
-
-def rollback_step(label: str, args: list[str]) -> bool:
-    result = git(*args)
+    if before is None:
+        result = git("branch", "-q", "-D", branch)
+        what = f"delete the branch {branch} that this run created"
+    else:
+        result = git("update-ref", f"refs/heads/{branch}", before, now)
+        what = f"set {branch} back to {before[:12]}"
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip().splitlines()[-1:] or [""]
-        print(
-            f"rollback incomplete: you are on {where()}; {label} failed: {detail[0]}",
-            file=sys.stderr,
-        )
-        return False
-    return True
+        print(f"rollback incomplete: could not {what}: {detail[0]}", file=sys.stderr)
 
 
 def cmd_base(args: argparse.Namespace) -> None:
     spec = load(args.scenario)
     branch = check_branch(spec["base_branch"], "base")
     source = check_ref(args.source, "--from")
-    patch = safe_path(f"seeds/{spec['seed']}.patch")
-    ensure_clean()
-    start = current_branch()
-    run("git", "switch", "-q", "--no-track", "-c", branch, source)
-    before = run("git", "rev-parse", "HEAD", capture=True)
-    paths: list[str] = []
+    if branch_tip(branch) is not None:
+        raise ScenarioError(f"base branch {branch} already exists")
     try:
-        paths = patch_paths(patch)
-        run("git", "apply", str(patch))
-        commit(paths, [seed_subject(spec), "Seeded defect, scripted."])
+        with temp_tree(source):
+            run("git", "switch", "-q", "--no-track", "-c", branch)
+            patch = safe_path(f"seeds/{spec['seed']}.patch")
+            paths = patch_paths(patch)
+            for path in paths:
+                if (here() / path).exists():
+                    safe_path(path, write=True)
+                else:
+                    safe_path_new(path)
+            run("git", "apply", str(patch))
+            commit(paths, [seed_subject(spec), "Seeded defect, scripted."])
+            if args.push:
+                push(branch)
     except BaseException:
-        rollback(start, branch, True, before, paths)
+        undo_branch(branch, None)
         raise
-    print(f"base branch {branch} from {source} with seed {spec['seed']}")
-    if args.push:
-        run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+    print(
+        f"base branch {branch} from {source} with seed {spec['seed']} (your checkout is unchanged)"
+    )
 
 
-def apply_step(
-    step: dict, values: dict[str, str], spec: dict, clean: str, touched: list[str]
-) -> None:
-    """Apply one step. Each path is added to ``touched`` after the step's checks and right
-    before it is written, so a rollback never treats a file the step did not write as its own."""
+def safe_path_new(relative: str) -> Path:
+    """A path the run will create: it must not exist yet in the tree (not even ignored)."""
+    path = safe_path_parent(relative)
+    if path.exists() or path.is_symlink():
+        raise ScenarioError(f"{relative} already exists; not overwritten")
+    return path
+
+
+def safe_path_parent(relative: str) -> Path:
+    """Like safe_path for a file that does not exist yet: checks the path, not the file."""
+    if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+        raise ScenarioError(f"path must be relative to the repository: {relative!r}")
+    if relative.startswith(":") or relative.endswith("/") or os.path.normpath(relative) != relative:
+        raise ScenarioError(f"path must be a plain normalised file path: {relative!r}")
+    tree = here()
+    parent = (tree / relative).parent.resolve()
+    if not parent.is_relative_to(tree.resolve()):
+        raise ScenarioError(f"path leaves the repository: {relative!r}")
+    parts = tuple(p.casefold() for p in Path(relative).parts)
+    if any(parts[: len(denied)] == denied for denied in DENIED_DIRS):
+        raise ScenarioError(f"path is in a protected folder: {relative!r}")
+    return tree / relative
+
+
+def push(branch: str) -> None:
+    run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+
+
+def apply_step(step: dict, values: dict[str, str], spec: dict, clean: str) -> list[str]:
+    """Apply one step in the temporary tree. Returns the paths it wrote."""
     if "revert_seed" in step:
         patch = safe_path(f"seeds/{spec['seed']}.patch")
-        touched += patch_paths(patch)
+        paths = patch_paths(patch)
         run("git", "apply", "-R", str(patch))
-    elif "restore" in step:
-        safe_path(step["restore"])
-        touched.append(step["restore"])
+        return paths
+    if "restore" in step:
+        safe_path_parent(step["restore"])
+        if (here() / step["restore"]).is_symlink():
+            raise ScenarioError(f"path is a symbolic link; not written: {step['restore']!r}")
         run("git", "checkout", clean, "--", step["restore"])
-    elif "replace" in step:
-        path = safe_path(step["replace"])
+        return [step["restore"]]
+    if "replace" in step:
+        path = (
+            safe_path(step["replace"], write=True) if (here() / step["replace"]).exists() else None
+        )
+        if path is None:
+            raise ScenarioError(f"replace: {step['replace']} does not exist")
         text = path.read_text(encoding="utf-8")
         if step["old"] not in text:
             raise ScenarioError(f"replace: text not found in {step['replace']}")
-        touched.append(step["replace"])
         path.write_text(text.replace(step["old"], step["new"], 1), encoding="utf-8")
-    elif "add_test" in step:
+        return [step["replace"]]
+    if "add_test" in step:
         rel = fill(step["dest"], values)
-        dest = safe_path(rel)
-        tracked = git("cat-file", "-e", f"HEAD:{rel}").returncode == 0
-        if dest.exists() and not tracked:
-            raise ScenarioError(
-                f"add_test: {rel} already exists and is not tracked; not overwritten"
-            )
-        touched.append(rel)
+        exists = (here() / rel).exists()
+        dest = safe_path(rel, write=True) if exists else safe_path_new(rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(fill(step["_template"], values), encoding="utf-8")
-    else:
-        raise ScenarioError(f"unknown step {step}")
+        return [rel]
+    raise ScenarioError(f"unknown step {step}")
 
 
 def cmd_attempt(args: argparse.Namespace) -> None:
     spec = load(args.scenario)
+    check_no_tool_names(args.key)
     values = tokens(check_key(args.key))
     attempt = next((a for a in spec["attempts"] if a["name"] == args.attempt), None)
     if attempt is None:
@@ -519,29 +534,32 @@ def cmd_attempt(args: argparse.Namespace) -> None:
     branch = validate_attempt(spec, attempt, values)
     twin = attempt.get("twin", spec["twin"])
     base = check_ref(f"refs/heads/{spec['base_branch']}", "base branch")
-    ensure_clean()
-    # Read templates now: switching branches may remove the scenarios folder.
+    # Templates come from the scenario folder of your checkout, read before the run.
     for step in attempt["steps"]:
         if "add_test" in step:
             step["_template"] = safe_path(step["add_test"]).read_text(encoding="utf-8")
             check_no_tool_names(step["_template"])
     clean = clean_ref(spec)
-    start = current_branch()
-    created = not run("git", "branch", "--list", branch, capture=True)
-    if not created:
-        if git("merge-base", "--is-ancestor", base, f"refs/heads/{branch}").returncode != 0:
-            raise ScenarioError(f"existing branch {branch} does not descend from {base}")
-        run("git", "switch", "-q", branch)
-    else:
-        run("git", "switch", "-q", "--no-track", "-c", branch, base)
-    before = run("git", "rev-parse", "HEAD", capture=True)
-    touched: list[str] = []
+    before = branch_tip(branch)
+    if (
+        before is not None
+        and git("merge-base", "--is-ancestor", base, f"refs/heads/{branch}").returncode != 0
+    ):
+        raise ScenarioError(f"existing branch {branch} does not descend from {base}")
     try:
-        for step in attempt["steps"]:
-            apply_step(step, values, spec, clean, touched)
-        sha = commit(touched, commit_message(fill(attempt["commit"], values), twin, author))
+        with temp_tree(base if before is None else f"refs/heads/{branch}"):
+            if before is None:
+                run("git", "switch", "-q", "--no-track", "-c", branch)
+            else:
+                run("git", "switch", "-q", branch)  # fails if it is checked out elsewhere
+            written: list[str] = []
+            for step in attempt["steps"]:
+                written += apply_step(step, values, spec, clean)
+            sha = commit(written, commit_message(fill(attempt["commit"], values), twin, author))
+            if args.push:
+                push(branch)
     except BaseException:
-        rollback(start, branch, created, before, sorted(set(touched)))
+        undo_branch(branch, before)
         raise
     record = {
         "scenario": spec["id"],
@@ -555,10 +573,9 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         "claim": attempt["claim"],
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    print(f"{branch}: attempt {args.attempt} committed; run record {write_run_record(record)}")
+    print(f"{branch}: attempt {args.attempt} committed (your checkout is unchanged); "
+          f"run record {write_run_record(record)}")  # fmt: skip
     print(f"post in Jira: claim: {attempt['claim']}")
-    if args.push:
-        run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
     if args.open_pr:
         run(
             "gh",
