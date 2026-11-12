@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YMS Bank demo</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="#/accounts">YMS Bank</a>
+    <span class="tag">Demo &middot; fake money</span>
+    <nav id="nav" class="nav" hidden>
+      <a href="#/accounts">Accounts</a>
+      <a href="#/transfer">Transfer</a>
+      <span id="who" class="muted"></span>
+      <button id="switch-customer" class="btn btn-quiet" type="button">Switch customer</button>
+    </nav>
+  </header>
+
+  <main>
+    <p id="error" class="notice notice-error" role="alert" hidden></p>
+
+    <section id="view-choose" class="view" hidden>
+      <h1>Choose a demo customer</h1>
+      <p class="muted">Every customer, account and amount here is synthetic.</p>
+      <ul id="customer-list" class="choices"></ul>
+    </section>
+
+    <section id="view-accounts" class="view" hidden>
+      <h1>Accounts</h1>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Account</th><th class="hide-small">Currency</th><th class="num">Balance</th><th></th></tr>
+          </thead>
+          <tbody id="account-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-transfer" class="view" hidden>
+      <h1>Transfer</h1>
+      <form id="transfer-form" class="form" novalidate>
+        <label>From account
+          <select name="from_account_id" required></select>
+        </label>
+        <label>To account number
+          <input name="to_account_number" placeholder="YMS-0000-0002" autocomplete="off" required>
+        </label>
+        <label>Amount
+          <input name="amount" inputmode="decimal" placeholder="25.00" autocomplete="off" required>
+        </label>
+        <label>Reference (optional)
+          <input name="reference" maxlength="40" autocomplete="off">
+        </label>
+        <div class="form-actions">
+          <button id="send-button" class="btn btn-primary" type="submit">Send</button>
+        </div>
+        <p id="transfer-status" class="notice" role="status" aria-live="polite" hidden></p>
+      </form>
+    </section>
+
+    <section id="view-statement" class="view" hidden>
+      <h1>Statement <span id="statement-number" class="muted"></span></h1>
+      <form id="statement-form" class="form form-inline">
+        <label>From <input type="date" name="from" required></label>
+        <label>To <input type="date" name="to" required></label>
+        <button class="btn" type="submit">Show</button>
+      </form>
+      <p id="statement-summary" class="muted"></p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Date</th><th>Description</th><th class="num">Amount</th><th class="num">Balance</th></tr>
+          </thead>
+          <tbody id="statement-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">YMS Bank is a demo with synthetic data. No real money moves.</footer>
+</body>
+</html>
