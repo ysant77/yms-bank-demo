@@ -254,6 +254,11 @@ def withdraw(
         raise InsufficientFunds(f"insufficient funds in {account.number}")
     conn.execute("BEGIN")
     try:
+        fresh = conn.execute(
+            "SELECT balance_minor FROM accounts WHERE id = ?", (account.id,)
+        ).fetchone()[0]
+        if fresh < amount.minor:
+            raise InsufficientFunds(f"insufficient funds in {account.number}")
         conn.execute(
             "UPDATE accounts SET balance_minor = ? WHERE id = ?",
             (account.balance_minor - amount.minor, account.id),
