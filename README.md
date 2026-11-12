@@ -19,6 +19,7 @@ no real customers, account numbers, credentials or secrets. YMS Bank is not a re
 | `src/bank/web/` | HTML, CSS and JavaScript, served as is. |
 | `src/bank/seed_data.py` | Synthetic demo database builder. |
 | `src/bank/testing/ci_report.py` | Pytest plugin that writes the CI report. |
+| `src/fraud/` | Synthetic card fraud score kit: data, features, model, evaluation. |
 | `seeds/` | Patches that add known defects for verifier scenarios. |
 
 ## Ledger rules
@@ -80,11 +81,38 @@ uv run pytest -m "bench or not bench" --ci-report=ci-report.json
 ```
 
 The report follows the `aat-ci-report/1` format: test ids with outcomes and durations, metrics
-recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), locked
+recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), an
+optional `data_hashes` block from the `record_data_hashes(train, live)` fixture, locked
 dependency versions from `uv.lock`, a sha256 of every file under `.github/workflows/`, head
 and base commits from `CI_HEAD_SHA`/`CI_BASE_SHA` (or `git rev-parse` of `HEAD` and
 `CI_BASE_REF`, default `main`), and the SQL operations in each migration. CI runs ruff, the
 default tests, then this report run, and uploads `ci-report.json` as an artifact.
+
+## Fraud score kit
+
+`src/fraud/` is a small card fraud score for the ML scenarios. **The data is synthetic and the
+model is a demo, not a real fraud system.** No real people, cards, merchants or institutions
+are used.
+
+- `data.py` generates 50,000 card transactions over 90 days from a fixed seed, with about 0.5%
+  fraud that depends on merchant category, hour, amount and account age. Every fraud gets a
+  later chargeback; `chargebacks_30d_before` counts the account's chargebacks in the 30 days
+  strictly before the transaction.
+- `features.py` builds the feature matrix. Each feature records its source time per row, and
+  `past_only_violations` checks that no feature uses data from the transaction time or later.
+- `model.py` trains a gradient-boosted model on days 1 to 60 and evaluates it on days 61 to 90
+  (time-based split, no shuffling, fixed random state).
+- `evaluate.py` has AUC, PR-AUC, recall at a false positive rate, PSI, false positive rate per
+  region with the max/min ratio, and `data_hash` (sha256 of the canonical CSV).
+
+```bash
+uv run python -m fraud.model   # train once and print the holdout metrics
+```
+
+The tests train once per session and record `auc`, `pr_auc`, `recall_at_1pct_fpr` and
+`fpr_ratio_max_min` with `record_metric`, and the training and live data hashes with
+`record_data_hashes`, which adds a `data_hashes` block to the CI report. On the clean code the
+holdout AUC is about 0.92.
 
 ## Seeds
 
