@@ -160,9 +160,9 @@ steps = [ { restore = "notes.txt" } ]
 """
 
 
-def git(repo, *args):
+def git(repo, *args, check=True):
     return subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+        ["git", *args], cwd=repo, check=check, capture_output=True, text=True
     ).stdout
 
 
@@ -252,25 +252,61 @@ def test_a_renaming_seed_is_committed_completely(demo_repo):
     assert files[0].startswith("R") and files[1:] == ["notes.txt", "renamed.txt"]
 
 
-@pytest.mark.parametrize(
-    "old, new",
-    [
-        ('base_branch = "test/s98-seed-demo"\n', ""),
-        ('twin_branch = "fix/{key_lower}-demo"\n', ""),
-        ('steps = [ { restore = "notes.txt" } ]', "commit_x = 1"),
-        ('title = "Demo defect"', 'title = "Demo defect written with Claude"'),
-        ('pr_title = "{KEY}: fix the demo defect"', 'pr_title = "{KEY}: fix from GPT-4o"'),
-        (
-            'commit = "fix(demo): revert the demo defect"',
-            'commit = "fix(demo): revert via copilot"',
-        ),
-        ('twin = "Nora"', 'twin = "Gemini"'),
-    ],
-)
+# Neutral ids: the parameter values must not appear in CI output or the report comment.
+SPEC_CASES = [
+    ("no-base", 'base_branch = "test/s98-seed-demo"\n', ""),
+    ("no-twin-branch", 'twin_branch = "fix/{key_lower}-demo"\n', ""),
+    (
+        "bad-step-key",
+        'steps = [ { restore = "notes.txt" } ]',
+        'steps = [ { restore = "notes.txt", x = "y" } ]',
+    ),
+    (
+        "replace-without-old",
+        '{ replace = "notes.txt", old = "broken", new = "half fixed" }',
+        '{ replace = "notes.txt", new = "half fixed" }',
+    ),
+    ("step-folder-magic", '{ restore = "notes.txt" }', '{ restore = ":/" }'),
+    ("product-in-title", 'title = "Demo defect"', 'title = "Demo defect, Claude3 draft"'),
+    (
+        "version-in-pr-title",
+        'pr_title = "{KEY}: fix the demo defect"',
+        'pr_title = "{KEY}: fix from GPT4"',
+    ),
+    (
+        "tool-in-commit",
+        'commit = "fix(demo): revert the demo defect"',
+        'commit = "fix(demo): revert via copilot"',
+    ),
+    (
+        "trailer-in-commit",
+        'commit = "fix(demo): revert the demo defect"',
+        'commit = "fix(demo): co-authored-by someone"',
+    ),
+    ("product-as-twin", 'twin = "Nora"', 'twin = "Claude"'),
+    (
+        "product-in-branch",
+        'twin_branch = "fix/{key_lower}-demo"',
+        'twin_branch = "fix/{key_lower}-claude_code"',
+    ),
+    ("product-in-seed", 'seed = "k9_demo"', 'seed = "k9_chatgpt"'),
+]
+
+
+@pytest.mark.parametrize("old, new", [c[1:] for c in SPEC_CASES], ids=[c[0] for c in SPEC_CASES])
 def test_incomplete_specs_and_tool_names_are_refused(demo_repo, old, new):
+    assert old in SPEC
     (demo_repo / "scenarios" / "S98.toml").write_text(SPEC.replace(old, new))
     with pytest.raises(scenario.ScenarioError):
         scenario.load("S98")
+
+
+ORDINARY = ["Gemini", "Mistral", "Phi", "Muse", "generated with the wrong date"]
+
+
+@pytest.mark.parametrize("text", ORDINARY, ids=[f"word-{n}" for n in range(len(ORDINARY))])
+def test_ordinary_words_are_not_refused(text):
+    scenario.check_no_tool_names({"title": text})
 
 
 def test_the_key_must_match_on_a_token_boundary():
@@ -325,3 +361,124 @@ def test_a_failed_step_keeps_an_existing_twin_branch_at_its_tip(demo_repo):
     assert git(demo_repo, "rev-parse", "fix/bank-9-demo").strip() == tip
     assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
     assert git(demo_repo, "status", "--porcelain") == ""
+
+
+def break_step(repo, old='old = "broken"', new='old = "absent"'):
+    spec = (repo / "scenarios" / "S98.toml").read_text()
+    (repo / "scenarios" / "S98.toml").write_text(spec.replace(old, new))
+    git(repo, "commit", "-q", "-am", "chore: break the step")
+
+
+def test_a_file_marked_assume_unchanged_is_refused_and_kept(demo_repo):
+    (demo_repo / "notes.txt").write_text("local edit\n")
+    git(demo_repo, "update-index", "--assume-unchanged", "notes.txt")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert (demo_repo / "notes.txt").read_text() == "local edit\n"
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+
+
+def test_untracked_files_hidden_by_settings_are_seen(demo_repo):
+    git(demo_repo, "config", "status.showUntrackedFiles", "no")
+    (demo_repo / "checks").mkdir()
+    (demo_repo / "checks" / "mine.txt").write_text("user file\n")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert (demo_repo / "checks" / "mine.txt").read_text() == "user file\n"
+
+
+def test_an_ignored_file_at_a_test_destination_is_not_overwritten(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    git(demo_repo, "switch", "-q", "main")
+    (demo_repo / ".gitignore").write_text("checks/\n")
+    git(demo_repo, "add", ".gitignore")
+    git(demo_repo, "commit", "-q", "-m", "chore: ignore checks")
+    git(demo_repo, "switch", "-q", "test/s98-seed-demo")
+    git(demo_repo, "merge", "-q", "--no-edit", "main")
+    git(demo_repo, "switch", "-q", "main")
+    (demo_repo / "checks").mkdir()
+    (demo_repo / "checks" / "bank9.txt").write_text("ignored user file\n")
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert (demo_repo / "checks" / "bank9.txt").read_text() == "ignored user file\n"
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
+
+
+def test_a_step_path_that_is_a_folder_is_refused(demo_repo):
+    (demo_repo / "folder").mkdir()
+    (demo_repo / "folder" / "keep.txt").write_text("x\n")
+    git(demo_repo, "add", "folder")
+    git(demo_repo, "commit", "-q", "-m", "chore: add a folder")
+    with pytest.raises(scenario.ScenarioError):
+        scenario.safe_path("folder")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [":/", ":(glob)*", ".", "./", "notes/"],
+    ids=["top", "glob", "dot", "dot-slash", "slash"],
+)
+def test_pathspec_magic_and_the_root_are_refused(demo_repo, path):
+    with pytest.raises(scenario.ScenarioError):
+        scenario.safe_path(path)
+
+
+def test_an_interrupt_during_a_step_still_rolls_back(demo_repo, monkeypatch):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    git(demo_repo, "switch", "-q", "main")
+    real = scenario.apply_step
+
+    def interrupted(step, *args):
+        real(step, *args)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(scenario, "apply_step", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert git(demo_repo, "status", "--porcelain", "--untracked-files=all") == ""
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+
+
+def test_a_seed_that_is_not_utf8_is_refused_and_rolled_back(demo_repo):
+    (demo_repo / "seeds" / "k9_demo.patch").write_bytes(b"\xff\xfe not a patch")
+    git(demo_repo, "commit", "-q", "-am", "chore: bad seed")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+
+
+def test_a_failed_step_from_a_detached_head_returns_there(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    git(demo_repo, "switch", "-q", "main")
+    break_step(demo_repo)
+    git(demo_repo, "switch", "-q", "--detach", "main")
+    start = git(demo_repo, "rev-parse", "HEAD").strip()
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert git(demo_repo, "symbolic-ref", "-q", "HEAD", check=False) == ""
+    assert git(demo_repo, "rev-parse", "HEAD").strip() == start
+
+
+def test_a_failed_rollback_step_stops_and_says_where_you_are(demo_repo, monkeypatch, capsys):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    git(demo_repo, "switch", "-q", "main")
+    break_step(demo_repo)
+    real = scenario.git
+
+    def failing_switch(*args):
+        if args[:1] == ("switch",):
+            return subprocess.CompletedProcess(args, 1, "", "fatal: simulated failure")
+        return real(*args)
+
+    monkeypatch.setattr(scenario, "git", failing_switch)
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    err = capsys.readouterr().err
+    assert "rollback incomplete: you are on branch fix/bank-9-demo; switch back failed" in err
+    # It stopped there: the created branch was not deleted.
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo").strip()
+
+
+def test_reads_use_the_branch_not_a_tag_with_the_same_name(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    seeded = git(demo_repo, "rev-parse", "refs/heads/test/s98-seed-demo").strip()
+    git(demo_repo, "tag", "test/s98-seed-demo", "main")
+    git(demo_repo, "switch", "-q", "main")
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    assert git(demo_repo, "rev-parse", "fix/bank-9-demo~1").strip() == seeded
