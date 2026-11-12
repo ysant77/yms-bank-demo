@@ -76,8 +76,8 @@ resampled apart), on the clean model and the weak model.
   13 SE below it.
 - The holdout false positive rate stays within 0.0004 of the 1% validation target (one SE is
   about 0.0004), so the S17 limit is 1.5%, not 1%.
-- The verifier's "too good" guard for AUC is 0.95: the clean model's AUC plus 2 SE is about 0.92,
-  and the leak's AUC minus 2 SE is about 0.98.
+- S40 also has `metric_at_most(auc, 0.95)`: the clean model's AUC plus 2 SE is about 0.92, and
+  the leak's AUC minus 2 SE is about 0.98. The verifier sends an AUC above 0.95 to a human.
 
 ## Regenerating a patch
 
