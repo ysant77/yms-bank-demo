@@ -66,9 +66,12 @@ def build(
     if ledger.list_customers(conn):
         raise ValueError("database already has customers")
     rng = random.Random(seed)
-    end = end or datetime.now(UTC).date()
+    now = datetime.now(UTC)
+    # History ends yesterday by default, so no entry is dated in the future.
+    end = end or (now.date() - timedelta(days=1))
     first_day = end - timedelta(days=days - 1)
-    opened = _at(rng, first_day).replace(hour=8)
+    # Accounts open the day before activity starts, so no entry predates its account.
+    opened = _at(rng, first_day - timedelta(days=1)).replace(hour=8)
 
     customer_ids = [
         ledger.create_customer(conn, name, opened) for name in fake_names(rng, customers)
@@ -87,6 +90,8 @@ def build(
         day = first_day + timedelta(days=offset)
         moments = sorted(_at(rng, day) for _ in range(rng.randrange(20, 45)))
         for moment in moments:
+            if moment > now:
+                break
             account_id, currency = rng.choice(all_accounts)
             amount = Money(rng.randrange(5, 400) * SCALE[currency], currency)
             roll = rng.random()
