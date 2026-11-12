@@ -12,7 +12,7 @@ uv run pytest tests/test_concurrency.py   # fails
 
 | Seed | File changed | Defect | Test that catches it | Scenarios |
 | --- | --- | --- | --- | --- |
-| `k1_race` | `src/bank/ledger.py` | `withdraw` reads the balance with a SELECT, checks it, then writes `balance - amount` in a separate step with a deferred `BEGIN`, so it does not hold the write lock from read to write. Concurrent withdrawals all pass the check and overwrite each other (lost update). | `tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw` | S04, S26, S32, S37 |
+| `k1_race` | `src/bank/ledger.py` | `withdraw` reads the balance and checks it outside the write lock, then writes the absolute value `balance - amount` inside `write_txn`. Concurrent withdrawals all pass the check and overwrite each other (lost update). The seed keeps `write_txn`, so it also works inside the one-transaction seeding of the demo data. | `tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw` | S04, S26, S32, S37 |
 | `k1_hidden_button` | `src/bank/web/app.css` | A `@media (max-width: 430px)` block sets `display: none` on the transfer form's Send button, so phone users cannot send a transfer. | `tests/test_web.py::test_send_button_not_hidden_at_or_below_430px` | S01 |
 
 ## Verification
@@ -22,7 +22,7 @@ above was run 5 times. The worktree was then removed.
 
 | Seed | Failures | Notes |
 | --- | --- | --- |
-| `k1_race` | 5 of 5 | All 20 threads report success, so the test fails on `successes == 1` (exactly one withdrawal may succeed). A further 20 runs also failed 20 of 20, so the seed needs **no** artificial delay. If a slower runner ever stops reproducing it, add `time.sleep(0.01)` between the read and the `BEGIN` in the seeded code only. |
+| `k1_race` | 5 of 5 full runs | Only the concurrency test fails; app startup (which seeds through `withdraw`) still works. All 20 threads report success, so the test fails on `successes <= 1`. S04 was also run end to end in a scratch clone: v1 fails its two acceptance tests and the concurrency test, v2 passes everything. If a slower runner ever stops reproducing the race, add `time.sleep(0.01)` between the check and `write_txn` in the seeded code only. |
 | `k1_hidden_button` | 5 of 5 | The CSS check reports `('(max-width: 430px)', '.form-actions #send-button')`. |
 
 With either seed applied, every other test in the default run still passes.
