@@ -61,13 +61,27 @@ def test_full_seed_keeps_every_running_balance_non_negative(tmp_path):
     assert ledger.check_invariants(conn) == []
 
 
-def test_default_seed_has_no_future_entries(tmp_path):
+def test_default_seed_ends_the_day_before_now(tmp_path):
     from datetime import UTC, datetime
 
+    now = datetime(2026, 3, 10, 23, 30, tzinfo=UTC)  # late in the day, not the wall clock
     conn = ledger.open_db(tmp_path / "now.db")
-    seed_data.build(conn, customers=5, accounts=8, days=3)
+    summary = seed_data.build(conn, customers=5, accounts=8, days=3, now=now)
     (latest,) = conn.execute("SELECT MAX(posted_at) FROM journal_entries").fetchone()
-    assert latest <= datetime.now(UTC).isoformat()
+    assert latest < "2026-03-10"
+    assert summary.last_day == date(2026, 3, 9)
+
+
+def test_entries_after_now_are_cut_and_the_summary_says_so(tmp_path):
+    from datetime import UTC, datetime
+
+    now = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
+    conn = ledger.open_db(tmp_path / "cut.db")
+    summary = seed_data.build(conn, customers=5, accounts=8, days=3, end=date(2026, 3, 10), now=now)
+    (latest,) = conn.execute("SELECT MAX(posted_at) FROM journal_entries").fetchone()
+    assert latest <= "2026-03-10T12:00:00Z"
+    assert summary.last_day <= date(2026, 3, 10)
+    assert ledger.check_invariants(conn) == []
 
 
 def test_invariants_catch_a_posting_before_the_opening(conn, at):

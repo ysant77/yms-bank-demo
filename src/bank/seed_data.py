@@ -61,12 +61,16 @@ def build(
     accounts: int = 100,
     days: int = 90,
     end: date | None = None,
+    now: datetime | None = None,
 ) -> Summary:
-    """Fill an empty, migrated database with customers, accounts and ``days`` of history."""
+    """Fill an empty, migrated database with customers, accounts and ``days`` of history.
+
+    ``now`` (default: the current time) is the latest moment an entry may be posted.
+    """
     if ledger.list_customers(conn):
         raise ValueError("database already has customers")
     rng = random.Random(seed)
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
     # History ends yesterday by default, so no entry is dated in the future.
     end = end or (now.date() - timedelta(days=1))
     first_day = end - timedelta(days=days - 1)
@@ -108,7 +112,10 @@ def build(
                 continue
 
     (entries,) = conn.execute("SELECT COUNT(*) FROM journal_entries").fetchone()
-    return Summary(customers, accounts, entries, first_day, end)
+    (last_posted,) = conn.execute("SELECT MAX(posted_at) FROM journal_entries").fetchone()
+    # When entries after ``now`` were cut, the real last day can be earlier than ``end``.
+    last_day = date.fromisoformat(last_posted[:10]) if last_posted else first_day
+    return Summary(customers, accounts, entries, first_day, last_day)
 
 
 def main(argv: list[str] | None = None) -> int:
