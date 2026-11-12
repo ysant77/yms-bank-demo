@@ -1,5 +1,4 @@
 import sqlite3
-import threading
 
 import pytest
 
@@ -39,29 +38,25 @@ def test_down_to_target_then_up_again(tmp_path):
     assert migrate.migrate_up(conn) == ALL
 
 
-def test_two_workers_on_a_fresh_database_apply_each_migration_once(tmp_path):
+def test_two_workers_on_a_fresh_database_apply_each_migration_once(tmp_path, run_together):
     path = tmp_path / "race.db"
-    barrier = threading.Barrier(2)
-    results, errors = [], []
+    results = []
 
-    def worker():
+    def worker(start):
+        start()  # both first connections race on the new file, including the WAL switch
         conn = connect(path)
         try:
-            barrier.wait()
             results.append(migrate.migrate_up(conn))
-        except Exception as exc:  # noqa: BLE001 - any error fails the test below
-            errors.append(repr(exc))
         finally:
             conn.close()
 
-    threads = [threading.Thread(target=worker) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert errors == []
+    assert run_together(2, worker) == []
     assert sorted(results[0] + results[1]) == ALL
-    assert migrate.applied_versions(connect(path)) == ALL
+    check = connect(path)
+    try:
+        assert migrate.applied_versions(check) == ALL
+    finally:
+        check.close()
 
 
 def test_statements_split_on_complete_sql():

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from bank.db import connect, write_txn
+from bank.db import connect, nesting_allowed, write_txn
 from bank.migrate import migrate_up
 from bank.money import Money, exponent
 
@@ -383,7 +383,8 @@ def run_once(
     with write_txn(conn):
         if done():
             return False
-        job(conn)
+        with nesting_allowed(conn):
+            job(conn)
         conn.execute(
             "INSERT INTO app_flags (name, state, set_at) VALUES (?, 'done', ?)"
             " ON CONFLICT (name) DO UPDATE SET state = 'done', set_at = excluded.set_at",

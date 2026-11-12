@@ -155,12 +155,74 @@ def test_a_failed_job_leaves_nothing_and_runs_again(conn):
 
 
 def test_a_nested_write_failure_undoes_only_its_block(conn):
-    from bank.db import write_txn
+    from bank.db import nesting_allowed, write_txn
 
-    with write_txn(conn):
+    with write_txn(conn), nesting_allowed(conn):
         ledger.create_customer(conn, "Kept")
         with pytest.raises(ledger.LedgerError):
             with write_txn(conn):
                 ledger.create_customer(conn, "Undone")
                 raise ledger.LedgerError("inner failure")
     assert [c["name"] for c in ledger.list_customers(conn)] == ["Kept"]
+
+
+def test_two_threads_run_a_job_once(tmp_path, run_together):
+    """The second caller passes the first check while the first job runs, so only the check
+    after the write lock stops it from running the job again."""
+    import threading
+    import time
+
+    path = tmp_path / "once.db"
+    ledger.open_db(path).close()
+    runs = []
+    lock = threading.Lock()
+
+    def job(c):
+        with lock:
+            runs.append(1)
+        time.sleep(0.5)  # hold the write lock while the other thread checks the flag
+
+    def worker(start):
+        c = ledger.open_db(path)
+        try:
+            start()
+            ledger.run_once(c, "job", job)
+        finally:
+            c.close()
+
+    assert run_together(2, worker) == []
+    assert runs == [1]
+
+
+def test_a_stray_transaction_is_not_joined_silently(conn, two_accounts):
+    """Outside run_once, a write on a connection with an open transaction raises as before."""
+    import sqlite3
+
+    a, b = two_accounts
+    conn.execute("BEGIN")
+    with pytest.raises(sqlite3.OperationalError, match="within a transaction"):
+        ledger.transfer(conn, a.id, b.id, Money.of("1.00", "EUR"))
+    conn.execute("ROLLBACK")
+
+
+class FailingUndo:
+    """A connection whose undo statements fail, to check they cannot hide the real error."""
+
+    in_transaction = True
+
+    def execute(self, sql):
+        if sql.startswith(("ROLLBACK", "RELEASE")):
+            raise __import__("sqlite3").OperationalError("undo failed")
+
+
+def test_a_failed_undo_does_not_hide_the_original_error():
+    from bank.db import nesting_allowed, write_txn
+
+    fake = FailingUndo()
+    with pytest.raises(ValueError, match="original"):
+        with nesting_allowed(fake), write_txn(fake):
+            raise ValueError("original")
+    fake.in_transaction = False
+    with pytest.raises(ValueError, match="original"):
+        with write_txn(fake):
+            raise ValueError("original")
