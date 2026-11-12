@@ -249,24 +249,13 @@ def withdraw(
     description: str = "Cash withdrawal",
     at: datetime | None = None,
 ) -> int:
-    account = _require(conn, account_id, amount)
-    if account.balance_minor < amount.minor:
-        raise InsufficientFunds(f"insufficient funds in {account.number}")
-    conn.execute("BEGIN")
-    try:
-        conn.execute(
-            "UPDATE accounts SET balance_minor = ? WHERE id = ?",
-            (account.balance_minor - amount.minor, account.id),
-        )
+    with write_txn(conn):
+        account = _require(conn, account_id, amount)
         clearing = _clearing_account(conn, amount.currency)
+        _debit(conn, account, amount.minor)
         _credit(conn, clearing, amount.minor)
         lines = [(account.id, -amount.minor), (clearing, amount.minor)]
-        entry_id = _post(conn, "withdrawal", description, amount.currency, lines, at)
-    except BaseException:
-        conn.execute("ROLLBACK")
-        raise
-    conn.execute("COMMIT")
-    return entry_id
+        return _post(conn, "withdrawal", description, amount.currency, lines, at)
 
 
 def transfer(
