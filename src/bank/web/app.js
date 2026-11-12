@@ -139,19 +139,13 @@ async function sendTransfer(event) {
     form.dataset.idempotencyKey = crypto.randomUUID();
     form.dataset.idempotencyBody = bodyText;
   }
+  let result;
   try {
-    const result = await api("/api/transfers", {
+    result = await api("/api/transfers", {
       method: "POST",
       body: bodyText,
       headers: { "Content-Type": "application/json", "Idempotency-Key": form.dataset.idempotencyKey },
     });
-    delete form.dataset.idempotencyKey;
-    delete form.dataset.idempotencyBody;
-    status.className = "notice notice-ok";
-    status.textContent = `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`;
-    form.amount.value = "";
-    form.reference.value = "";
-    await renderTransfer();
   } catch (error) {
     // 422 means the key was refused for this body: start over with a new key next time.
     if (error.status === 422) {
@@ -160,8 +154,24 @@ async function sendTransfer(event) {
     }
     status.className = "notice notice-error";
     status.textContent = `Transfer failed: ${error.message}`;
-  } finally {
     status.hidden = false;
+    button.disabled = false;
+    return;
+  }
+  // The money has moved. A failure from here on must not say "Transfer failed", or the user
+  // may send it again under a new key.
+  delete form.dataset.idempotencyKey;
+  delete form.dataset.idempotencyBody;
+  status.className = "notice notice-ok";
+  status.textContent = `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`;
+  status.hidden = false;
+  form.amount.value = "";
+  form.reference.value = "";
+  try {
+    await renderTransfer();
+  } catch (error) {
+    status.textContent += ` The balances did not refresh (${error.message}); reload the page.`;
+  } finally {
     button.disabled = false;
   }
 }
