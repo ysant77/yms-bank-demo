@@ -100,8 +100,9 @@ are used.
   strictly before the transaction.
 - `features.py` builds the feature matrix. Each feature records its source time per row, and
   `past_only_violations` checks that no feature uses data from the transaction time or later.
-- `model.py` trains a gradient-boosted model on days 1 to 60 and evaluates it on days 61 to 90
-  (time-based split, no shuffling, fixed random state).
+- `model.py` fits a gradient-boosted model on days 1 to 45, chooses the decision threshold at a
+  1% false positive rate on days 46 to 60 (validation), and reports every metric on days 61 to
+  90 (holdout). The split is by time, with no shuffling and a fixed random state.
 - `evaluate.py` has AUC, PR-AUC, recall at a false positive rate, PSI, false positive rate per
   region with the max/min ratio, and `data_hash` (sha256 of the canonical CSV).
 
@@ -113,10 +114,10 @@ uv sync --extra fraud
 uv run python -m fraud.model   # train once and print the holdout metrics
 ```
 
-The tests train once per session and record `auc`, `pr_auc`, `recall_at_1pct_fpr` and
-`fpr_ratio_max_min` with `record_metric`, and the training and live data hashes with
-`record_data_hashes`, which adds a `data_hashes` block to the CI report. On the clean code the
-holdout AUC is about 0.92.
+The tests train once per session and record `auc`, `pr_auc`, `recall_at_threshold`,
+`fpr_at_threshold` and `fpr_ratio_max_min` (all on the holdout) with `record_metric`, and the
+training (days 1 to 60) and live (days 61 to 90) data hashes with `record_data_hashes`, which
+adds a `data_hashes` block to the CI report. On the clean code the holdout AUC is about 0.91.
 
 ## Seeds
 

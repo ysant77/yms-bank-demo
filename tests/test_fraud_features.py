@@ -9,7 +9,7 @@ from fraud.features import HISTORY, NO_SOURCE, REQUEST, FeatureMatrix, past_only
 
 
 def test_features_use_past_only(fraud_run):
-    for matrix in (fraud_run.train, fraud_run.test):
+    for matrix in (fraud_run.train, fraud_run.valid, fraud_run.test):
         assert past_only_violations(matrix) == {}
 
 

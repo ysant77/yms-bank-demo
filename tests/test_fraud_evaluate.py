@@ -46,6 +46,17 @@ def test_ranking_metrics_on_a_known_case():
     assert threshold_at_fpr(y, scores, 0.01) == 99.0
 
 
+def test_threshold_at_fpr_is_the_highest_threshold_with_the_best_recall():
+    # 100 genuine rows and 2 frauds; a 2% false positive rate allows 2 flagged genuine rows.
+    y = np.array([1, 1] + [0] * 100)
+    scores = np.array([11, 7, 10, 9, 8] + [0] * 97, dtype=float)
+    # Thresholds 11, 10 and 9 all find 1 fraud within 2%; the function returns the highest.
+    assert threshold_at_fpr(y, scores, 0.02) == 11.0
+    assert recall_at_fpr(y, scores, 0.02) == 0.5
+    # A genuine row scores highest and the limit allows none: nothing can be flagged.
+    assert threshold_at_fpr(np.array([0, 1]), np.array([2.0, 1.0]), 0.01) == np.inf
+
+
 def test_fairness_ratio():
     y = np.zeros(8, dtype=int)
     groups = np.array(["A"] * 4 + ["B"] * 4)
