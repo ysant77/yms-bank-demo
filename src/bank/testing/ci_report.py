@@ -2,8 +2,10 @@
 
 Enable it with ``-p bank.testing.ci_report`` (the project's pytest config does this) and write
 the report with ``--ci-report=PATH``. Tests record numbers through the ``record_metric``
-fixture. Head and base commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``, else from
-``git rev-parse`` (``HEAD`` and ``CI_BASE_REF``, default ``main``).
+fixture. Model tests can record the sha256 of their training and live data through the
+``record_data_hashes`` fixture, which adds an optional ``data_hashes`` block. Head and base
+commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``, else from ``git rev-parse`` (``HEAD`` and
+``CI_BASE_REF``, default ``main``).
 """
 
 from __future__ import annotations
@@ -123,6 +125,7 @@ class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
         self.metrics: dict[str, float | int] = {}
+        self.data_hashes: dict[str, str] | None = None
 
     def record(self, name: str, value: float | int) -> None:
         if not isinstance(name, str) or not name:
@@ -132,6 +135,12 @@ class Collector:
         if not math.isfinite(value):
             raise ValueError(f"metric {name} must be finite")
         self.metrics[name] = value
+
+    def record_data_hashes(self, train: str, live: str) -> None:
+        for name, value in (("train", train), ("live", live)):
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                raise ValueError(f"{name} data hash must be a lowercase sha256 hex digest")
+        self.data_hashes = {"train": train, "live": live}
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         entry = self.tests.setdefault(
@@ -151,7 +160,7 @@ class Collector:
         vulns = audit_vulnerabilities(os.environ.get("CI_AUDIT_JSON"))
         if vulns is not None:
             self.metrics["audit_vulns"] = vulns
-        return {
+        report: dict[str, object] = {
             "schema": SCHEMA,
             "repository": os.environ.get("GITHUB_REPOSITORY") or f"local/{root.name}",
             "head_sha": os.environ.get("CI_HEAD_SHA") or git_sha(root, "HEAD"),
@@ -163,6 +172,9 @@ class Collector:
             "deps": locked_deps(root),
             "migrations": migrations(root),
         }
+        if self.data_hashes is not None:
+            report["data_hashes"] = dict(self.data_hashes)
+        return report
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -195,3 +207,9 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 def record_metric(request: pytest.FixtureRequest) -> Callable[[str, float | int], None]:
     """Record a number for the report: ``record_metric("transfers_per_s", 412.0)``."""
     return request.config.stash[COLLECTOR].record
+
+
+@pytest.fixture
+def record_data_hashes(request: pytest.FixtureRequest) -> Callable[[str, str], None]:
+    """Record the sha256 of the training and live data: ``record_data_hashes(train, live)``."""
+    return request.config.stash[COLLECTOR].record_data_hashes

@@ -1,0 +1,30 @@
+diff --git a/src/fraud/features.py b/src/fraud/features.py
+index 45423f4..b90fcfd 100644
+--- a/src/fraud/features.py
++++ b/src/fraud/features.py
+@@ -87,6 +87,12 @@ FEATURE_SETS = {
+         "account_age_days",
+         "chargebacks_30d_before",
+     ),
++    "v3": (
++        "merchant_category",
++        "hour",
++        "account_age_days",
++        "chargebacks_30d_before",
++    ),
+ }
+ 
+ 
+diff --git a/src/fraud/model.py b/src/fraud/model.py
+index 44c8edf..ced4ff0 100644
+--- a/src/fraud/model.py
++++ b/src/fraud/model.py
+@@ -24,7 +24,7 @@ from fraud import evaluate
+ from fraud.data import SEED, Dataset, Table, generate, take
+ from fraud.features import FeatureMatrix, build
+ 
+-FEATURE_SET = "v2"
++FEATURE_SET = "v3"
+ TRAIN_DAYS = (1, 45)
+ VALID_DAYS = (46, 60)
+ TEST_DAYS = (61, 90)

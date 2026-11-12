@@ -19,6 +19,7 @@ no real customers, account numbers, credentials or secrets. YMS Bank is not a re
 | `src/bank/web/` | HTML, CSS and JavaScript, served as is. |
 | `src/bank/seed_data.py` | Synthetic demo database builder. |
 | `src/bank/testing/ci_report.py` | Pytest plugin that writes the CI report. |
+| `src/fraud/` | Synthetic card fraud score kit: data, features, model, evaluation. |
 | `seeds/` | Patches that add known defects for verifier scenarios. |
 
 ## Ledger rules
@@ -80,11 +81,50 @@ uv run pytest -m "bench or not bench" --ci-report=ci-report.json
 ```
 
 The report follows the `aat-ci-report/1` format: test ids with outcomes and durations, metrics
-recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), locked
+recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), an
+optional `data_hashes` block from the `record_data_hashes(train, live)` fixture, locked
 dependency versions from `uv.lock`, a sha256 of every file under `.github/workflows/`, head
 and base commits from `CI_HEAD_SHA`/`CI_BASE_SHA` (or `git rev-parse` of `HEAD` and
 `CI_BASE_REF`, default `main`), and the SQL operations in each migration. CI runs ruff, the
 default tests, then this report run, and uploads `ci-report.json` as an artifact.
+
+## Fraud score kit
+
+`src/fraud/` is a small card fraud score for the ML scenarios. **The data is synthetic and the
+model is a demo, not a real fraud system.** No real people, cards, merchants or institutions
+are used.
+
+- `data.py` generates 200,000 card transactions over 90 days from a fixed seed, with 0.53%
+  fraud overall (0.44% on the holdout) that depends on merchant category, hour, amount and
+  account age. Every fraud gets a chargeback 2 to 21 days later, and a few genuine
+  transactions get a dispute 3 to 31 days later; `chargebacks_30d_before` counts the account's chargebacks in the 30 days
+  strictly before the transaction.
+- `features.py` builds the feature matrix. Each feature records its source time per row, and
+  `past_only_violations` checks that no feature uses data from the transaction time or later.
+- `model.py` fits a gradient-boosted model on days 1 to 45, chooses the decision threshold at a
+  1% false positive rate on days 46 to 60 (validation), and reports every metric on days 61 to
+  90 (holdout). The split is by time, with no shuffling and a fixed random state.
+- `evaluate.py` has AUC, PR-AUC, recall at a false positive rate, PSI, false positive rate per
+  region with the max/min ratio, and `data_hash` (sha256 of the canonical CSV).
+
+The kit needs numpy and scikit-learn, which are in the optional `fraud` extra so the bank
+service does not install them. Without the extra, the fraud tests are skipped. CI installs it.
+
+```bash
+uv sync --extra fraud
+uv run python -m fraud.model   # train once and print the holdout metrics
+```
+
+The tests train once per session and record `auc`, `pr_auc`, `recall_at_threshold`,
+`fpr_at_threshold`, `fpr_gap_max_min`, `fpr_ratio_max_min` (only when finite) and `psi_amount`
+(all on the holdout) with `record_metric`, and the
+development (days 1 to 60: fit on 1 to 45, threshold on 46 to 60) and live (days 61 to 90) data
+hashes with `record_data_hashes`, which adds a `data_hashes` block to the CI report. On the
+clean code the holdout AUC is about 0.89 and the PR-AUC about 0.39.
+
+Labels are taken as final: a fraud near the end of a window counts as fraud even though its
+chargeback would arrive up to 21 days later. A real pipeline would leave a label-maturity gap of
+that length between the training data and the evaluation; this demo does not.
 
 ## Seeds
 
