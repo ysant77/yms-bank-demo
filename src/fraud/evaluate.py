@@ -22,13 +22,12 @@ def pr_auc(y_true: np.ndarray, scores: np.ndarray) -> float:
 
 
 def threshold_at_fpr(y_true: np.ndarray, scores: np.ndarray, fpr: float = 0.01) -> float:
-    """The threshold of the ROC point that ``recall_at_fpr`` picks.
+    """The lowest threshold whose false positive rate is at most ``fpr``.
 
-    That is the highest threshold that reaches the best recall at a false positive rate of at
-    most ``fpr``, among the thresholds ``roc_curve`` keeps. A lower threshold can have the same
-    recall and still a false positive rate of at most ``fpr``. Scores at or above the threshold
-    are flagged. The result is ``inf`` (flag nothing) when none of the kept finite thresholds
-    qualifies.
+    Only the thresholds that ``roc_curve`` keeps are candidates. Scores at or above the threshold
+    are flagged. The recall at this threshold is ``recall_at_fpr(y_true, scores, fpr)``, the
+    highest recall that the rate allows. ``roc_curve`` always keeps ``inf`` first (flag nothing,
+    false positive rate 0), so the result is ``inf`` when no finite threshold qualifies.
     """
     fprs, _, thresholds = roc_curve(y_true, scores)
     return float(thresholds[np.flatnonzero(fprs <= fpr).max()])
@@ -58,9 +57,9 @@ def psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> float:
 def fairness_report(
     y_true: np.ndarray, scores: np.ndarray, groups: np.ndarray, threshold: float
 ) -> dict[str, object]:
-    """False positive rate per group at ``threshold``, and the ratio of the highest to the lowest.
+    """False positive rate per group at ``threshold``, with the gap and ratio of highest to lowest.
 
-    The ratio is infinite when a group has no false positives.
+    The gap is always finite. The ratio is infinite when a group has no false positives.
     """
     y_true = np.asarray(y_true)
     flagged = np.asarray(scores) >= threshold
@@ -72,6 +71,7 @@ def fairness_report(
     return {
         "threshold": threshold,
         "fpr_by_group": per_group,
+        "fpr_gap_max_min": high - low,
         "fpr_ratio_max_min": high / low if low > 0 else math.inf,
     }
 

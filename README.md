@@ -94,7 +94,7 @@ default tests, then this report run, and uploads `ci-report.json` as an artifact
 model is a demo, not a real fraud system.** No real people, cards, merchants or institutions
 are used.
 
-- `data.py` generates 50,000 card transactions over 90 days from a fixed seed, with about 0.5%
+- `data.py` generates 200,000 card transactions over 90 days from a fixed seed, with about 0.5%
   fraud that depends on merchant category, hour, amount and account age. Every fraud gets a
   later chargeback; `chargebacks_30d_before` counts the account's chargebacks in the 30 days
   strictly before the transaction.
@@ -115,9 +115,11 @@ uv run python -m fraud.model   # train once and print the holdout metrics
 ```
 
 The tests train once per session and record `auc`, `pr_auc`, `recall_at_threshold`,
-`fpr_at_threshold` and `fpr_ratio_max_min` (all on the holdout) with `record_metric`, and the
+`fpr_at_threshold`, `fpr_gap_max_min`, `fpr_ratio_max_min` (only when finite) and `psi_amount`
+(all on the holdout) with `record_metric`, and the
 training (days 1 to 60) and live (days 61 to 90) data hashes with `record_data_hashes`, which
-adds a `data_hashes` block to the CI report. On the clean code the holdout AUC is about 0.91.
+adds a `data_hashes` block to the CI report. On the clean code the holdout AUC is about 0.89
+and the PR-AUC about 0.39.
 
 ## Seeds
 

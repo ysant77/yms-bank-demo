@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 SEED = 7
-N_ROWS = 50_000
+N_ROWS = 200_000  # about 290 holdout frauds: see seeds/README.md for the margins
 N_DAYS = 90
 N_ACCOUNTS = 6_000
 START_TS = 1_767_225_600  # 2026-01-01T00:00:00Z, the start of day 1

@@ -12,12 +12,13 @@ type = "Story"
 points = 3
 summary = "Ship fraud model v3"
 acceptance_criteria = """
-AC1 | Holdout AUC on days 61-90 is at least 0.88 | metric_at_least(auc, 0.88)
-AC2 | False positive rate at the decision threshold is at most 1% | metric_at_most(fpr_at_threshold, 0.01)
+AC1 | Holdout PR-AUC on days 61-90 is at least 0.25 | metric_at_least(pr_auc, 0.25)
+AC2 | Holdout false positive rate at the decision threshold is at most 1.5% | metric_at_most(fpr_at_threshold, 0.015)
 """
 
-# Omar claims v3 is ready. Its feature set drops the amount, so the holdout AUC is about 0.86
-# and the gate fails, while every test passes.
+# Omar claims v3 is ready. Its feature set drops the amount, so the holdout PR-AUC falls from
+# about 0.39 to about 0.08 and the gate fails, while every test passes. The threshold targets a
+# 1% false positive rate on validation; AC2 allows for the holdout to differ a little.
 [[attempts]]
 name = "v1"
 commit = "test(fraud): add evaluation gate tests for fraud model v3"

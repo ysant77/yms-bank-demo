@@ -55,12 +55,32 @@ def test_holdout_fpr_can_exceed_the_target_when_the_data_drifts():
 
 def test_model_metrics_are_recorded(fraud_run, record_metric):
     metrics = fraud_run.metrics
-    for name in ("auc", "pr_auc", "recall_at_threshold", "fpr_at_threshold", "fpr_ratio_max_min"):
-        record_metric(name, metrics[name])
-    assert 0.75 < metrics["auc"] <= 1.0
+    for name, value in metrics.items():
+        record_metric(name, value)
+    # Clean holdout AUC is about 0.89 (bootstrap SE 0.015) and the weak v3 model about 0.85, so
+    # both stay inside the band; the gate between them is PR-AUC in the CI report. A leak lifts
+    # AUC above 0.98, which is outside the band. See seeds/README.md for the measurements.
+    assert 0.80 < metrics["auc"] < 0.97
     assert 0.0 < metrics["pr_auc"] <= 1.0
     assert 0.0 < metrics["recall_at_threshold"] <= 1.0
     assert 0.0 <= metrics["fpr_at_threshold"] <= 1.0
+    assert 0.0 <= metrics["fpr_gap_max_min"] <= 1.0
+    assert 0.0 <= metrics["psi_amount"] < 0.1  # synthetic amounts do not drift
+    assert all(np.isfinite(value) for value in metrics.values())
+
+
+def test_infinite_fpr_ratio_is_left_out_of_the_metrics():
+    y = np.array([0] * 400 + [1] * 4)
+    valid_scores = np.concatenate([np.linspace(0.0, 0.5, 400), [0.9, 0.95, 0.97, 0.99]])
+    regions = np.array(["A", "B"] * 200 + ["A"] * 4)
+    # On the holdout every genuine row of region A scores 0.95 and is flagged; none of B is.
+    test_scores = np.where((regions == "A") & (y == 0), 0.95, valid_scores * (regions == "B"))
+    test_scores[y == 1] = 0.99
+    _, metrics, fairness = holdout_metrics(y, valid_scores, y, test_scores, regions)
+    assert fairness["fpr_by_group"] == {"A": 1.0, "B": 0.0}
+    assert fairness["fpr_ratio_max_min"] == np.inf
+    assert "fpr_ratio_max_min" not in metrics
+    assert metrics["fpr_gap_max_min"] == 1.0
 
 
 def test_fairness_report_covers_every_region(fraud_run):
@@ -68,6 +88,7 @@ def test_fairness_report_covers_every_region(fraud_run):
     assert sorted(report["fpr_by_group"]) == ["A", "B", "C", "D", "E"]
     rates = report["fpr_by_group"].values()
     assert report["fpr_ratio_max_min"] == max(rates) / min(rates)
+    assert report["fpr_gap_max_min"] == max(rates) - min(rates)
 
 
 def test_data_hashes_are_recorded(fraud_run, record_data_hashes):

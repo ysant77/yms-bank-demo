@@ -14,6 +14,7 @@ deterministic. This is a demo on synthetic data, not a real fraud system.
 from __future__ import annotations
 
 import functools
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -79,7 +80,9 @@ def holdout_metrics(
 ) -> tuple[float, dict[str, float], dict[str, object]]:
     """Choose the threshold on validation, then measure everything on the holdout.
 
-    Returns the threshold, the holdout metrics and the holdout fairness report per group.
+    Returns the threshold, the holdout metrics and the holdout fairness report per group. The
+    fairness gap is always in the metrics; the ratio only when it is finite, because the CI
+    report is JSON and has no infinity.
     """
     threshold = evaluate.threshold_at_fpr(y_valid, valid_scores, target_fpr)
     flagged = test_scores >= threshold
@@ -89,8 +92,11 @@ def holdout_metrics(
         "pr_auc": evaluate.pr_auc(y_test, test_scores),
         "recall_at_threshold": float(flagged[y_test == 1].mean()),
         "fpr_at_threshold": float(flagged[y_test == 0].mean()),
-        "fpr_ratio_max_min": float(fairness["fpr_ratio_max_min"]),
+        "fpr_gap_max_min": float(fairness["fpr_gap_max_min"]),
     }
+    ratio = float(fairness["fpr_ratio_max_min"])
+    if math.isfinite(ratio):
+        metrics["fpr_ratio_max_min"] = ratio
     return threshold, metrics, fairness
 
 
@@ -126,6 +132,8 @@ def run(feature_set: str = FEATURE_SET, seed: int = SEED) -> Result:
     threshold, metrics, fairness = holdout_metrics(
         valid_rows["is_fraud"], valid_scores, test_rows["is_fraud"], scores, test_rows["region"]
     )
+    # Drift of the amount from training to holdout; above 0.2 is usually read as a large shift.
+    metrics["psi_amount"] = evaluate.psi(train_rows["amount_minor"], test_rows["amount_minor"])
     # The training data hash covers every row the model was built from: fit and threshold.
     development = take(txns, np.concatenate([train_index, valid_index]))
     return Result(

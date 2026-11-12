@@ -7,7 +7,7 @@ from fraud.features import HISTORY, NO_SOURCE
 
 def test_{TOKEN}_features_use_past_only(fraud_run):
     # Checks the source time of every value actually built, after the chargeback join.
-    for matrix in (fraud_run.train, fraud_run.test):
+    for matrix in (fraud_run.train, fraud_run.valid, fraud_run.test):
         for j, (name, kind) in enumerate(zip(matrix.names, matrix.kinds, strict=True)):
             source = matrix.source_ts[:, j]
             used = source != NO_SOURCE
@@ -18,8 +18,10 @@ def test_{TOKEN}_features_use_past_only(fraud_run):
             assert not late.any(), f"{name}: {int(late.sum())} rows use data from ts or later"
 
 
-def test_{TOKEN}_holdout_auc(fraud_run, record_metric):
+def test_{TOKEN}_holdout_metrics(fraud_run, record_metric):
     holdout_days = fraud_run.test_rows["day"]
     assert holdout_days.min() == 61 and holdout_days.max() == 90
-    assert np.all(fraud_run.train_rows["day"] <= 60)
+    assert np.all(fraud_run.train_rows["day"] <= 45)
+    assert np.all(fraud_run.valid_rows["day"] <= 60)
     record_metric("auc", fraud_run.metrics["auc"])
+    record_metric("pr_auc", fraud_run.metrics["pr_auc"])

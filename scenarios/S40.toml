@@ -13,7 +13,7 @@ points = 5
 summary = "Add chargeback history to the fraud score, using past data only"
 acceptance_criteria = """
 AC1 | Every feature uses only data from before the transaction time | test_passes(test_{TOKEN}_features_use_past_only)
-AC2 | Holdout AUC on days 61-90 is at least 0.88 | metric_at_least(auc, 0.88)
+AC2 | Holdout PR-AUC on days 61-90 is at least 0.25 | metric_at_least(pr_auc, 0.25)
 """
 
 # Theo claims the model is ready, but the chargeback window still reaches 30 days past the
@@ -26,7 +26,7 @@ steps = [
   { add_test = "scenarios/S40/test_fraud_features.py.tmpl", dest = "tests/test_{token}_fraud_features.py" },
 ]
 
-# Nora ends the window at the transaction time. AUC falls back to about 0.92.
+# Nora ends the window at the transaction time. AUC falls back to about 0.89.
 [[attempts]]
 name = "v2"
 twin = "Nora"
