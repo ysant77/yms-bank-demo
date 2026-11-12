@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("sklearn", reason="needs the fraud extra: uv sync --extra fraud")
+
 import numpy as np
 
 from fraud.data import DAY_S, chargeback_window

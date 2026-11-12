@@ -1,8 +1,11 @@
+import pytest
+
+pytest.importorskip("sklearn", reason="needs the fraud extra: uv sync --extra fraud")
+
 import hashlib
 import math
 
 import numpy as np
-import pytest
 
 from fraud.evaluate import (
     auc,

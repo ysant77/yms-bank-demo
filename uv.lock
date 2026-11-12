@@ -160,9 +160,13 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+fraud = [
     { name = "numpy" },
     { name = "scikit-learn" },
-    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -175,10 +179,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.5" },
-    { name = "numpy", specifier = ">=2.5.4" },
-    { name = "scikit-learn", specifier = ">=1.9.1" },
+    { name = "numpy", marker = "extra == 'fraud'", specifier = ">=2.5.4" },
+    { name = "scikit-learn", marker = "extra == 'fraud'", specifier = ">=1.9.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
+provides-extras = ["fraud"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -105,7 +105,11 @@ are used.
 - `evaluate.py` has AUC, PR-AUC, recall at a false positive rate, PSI, false positive rate per
   region with the max/min ratio, and `data_hash` (sha256 of the canonical CSV).
 
+The kit needs numpy and scikit-learn, which are in the optional `fraud` extra so the bank
+service does not install them. Without the extra, the fraud tests are skipped. CI installs it.
+
 ```bash
+uv sync --extra fraud
 uv run python -m fraud.model   # train once and print the holdout metrics
 ```
 
