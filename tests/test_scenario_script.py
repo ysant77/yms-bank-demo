@@ -309,3 +309,19 @@ def test_push_uses_an_explicit_refspec(demo_repo, tmp_path):
     assert scenario.main(["base", "S98", "--from", "main", "--push"]) == 0
     heads = git(remote, "for-each-ref", "--format=%(refname)", "refs/heads")
     assert "refs/heads/test/s98-seed-demo" in heads.split()
+
+
+def test_a_failed_step_keeps_an_existing_twin_branch_at_its_tip(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    tip = git(demo_repo, "rev-parse", "fix/bank-9-demo").strip()
+    git(demo_repo, "switch", "-q", "main")
+    spec = (demo_repo / "scenarios" / "S98.toml").read_text()
+    (demo_repo / "scenarios" / "S98.toml").write_text(
+        spec.replace('old = "broken"', 'old = "absent"')
+    )
+    git(demo_repo, "commit", "-q", "-am", "chore: break the step")
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert git(demo_repo, "rev-parse", "fix/bank-9-demo").strip() == tip
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert git(demo_repo, "status", "--porcelain") == ""
