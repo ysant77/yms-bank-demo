@@ -104,3 +104,23 @@ def test_malformed_files_are_rejected(tmp_path, name, text):
     path.write_text(text)
     with pytest.raises(ValueError):
         migrate.parse(path)
+
+
+def test_a_truly_locked_database_is_reported_after_one_busy_wait(tmp_path):
+    """The WAL retry is only for quick failures: a database held by another writer fails after
+    about one busy timeout, not after many."""
+    import sqlite3
+    import time
+
+    path = tmp_path / "held.db"
+    holder = sqlite3.connect(path, isolation_level=None)
+    holder.execute("CREATE TABLE t (x)")
+    holder.execute("BEGIN EXCLUSIVE")
+    try:
+        started = time.monotonic()
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            connect(path, timeout_ms=300)
+        assert time.monotonic() - started < 1.5
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()

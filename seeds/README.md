@@ -14,7 +14,7 @@ uv run pytest tests/test_concurrency.py   # fails
 
 | Seed | File changed | Defect | Test that catches it | Scenarios |
 | --- | --- | --- | --- | --- |
-| `k1_race` | `src/bank/ledger.py` | `withdraw` reads the balance and checks it outside the write lock, then writes the absolute value `balance - amount` inside `write_txn`. Concurrent withdrawals all pass the check and overwrite each other (lost update). The seed keeps `write_txn`, so it also works inside the one-transaction seeding of the demo data. | `tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw` | S04, S26, S32, S37 |
+| `k1_race` | `src/bank/ledger.py` | `withdraw` reads the balance and checks it outside the write lock, waits 10 ms, then writes the absolute value `balance - amount` inside `write_txn`. Concurrent withdrawals all pass the check and overwrite each other (lost update). The pause makes the race deterministic; the seed keeps `write_txn`, so it also works inside the one-transaction seeding of the demo data. | `tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw` | S04, S26, S32, S37 |
 | `k1_hidden_button` | `src/bank/web/app.css` | A `@media (max-width: 430px)` block sets `display: none` on the transfer form's Send button, so phone users cannot send a transfer. | `tests/test_web.py::test_send_button_not_hidden_at_or_below_430px` | S01 |
 
 ### Verification
@@ -24,7 +24,7 @@ above was run 5 times. The worktree was then removed.
 
 | Seed | Failures | Notes |
 | --- | --- | --- |
-| `k1_race` | 5 of 5 full runs | Only the concurrency test fails; app startup (which seeds through `withdraw`) still works. All 20 threads report success, so the test fails on `successes <= 1`. S04 was also run end to end in a scratch clone: v1 fails its two acceptance tests and the concurrency test, v2 passes everything. If a slower runner ever stops reproducing the race, add `time.sleep(0.01)` between the check and `write_txn` in the seeded code only. |
+| `k1_race` | 200 of 200 races; 1 full run | Without the 10 ms pause the seeded race showed in all but 2 of 300 runs on a quiet machine (3 of 100 under load were missed), so a seeded branch could pass CI; with the pause, 200 of 200 runs showed it. In the full run only the concurrency test fails and app startup still works. S04 was also run end to end in a scratch clone: v1 fails its two acceptance tests and the concurrency test, v2 passes everything. |
 | `k1_hidden_button` | 5 of 5 | The CSS check reports `('(max-width: 430px)', '.form-actions #send-button')`. |
 
 With either seed applied, every other test in the default run still passes.

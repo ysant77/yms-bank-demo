@@ -1,14 +1,23 @@
 diff --git a/src/bank/ledger.py b/src/bank/ledger.py
-index 40f5260..160066b 100644
+index 40f5260..300deff 100644
 --- a/src/bank/ledger.py
 +++ b/src/bank/ledger.py
-@@ -252,10 +252,15 @@ def withdraw(
+@@ -15,6 +15,7 @@ from __future__ import annotations
+ import hashlib
+ import json
+ import sqlite3
++import time
+ from collections.abc import Callable
+ from dataclasses import dataclass
+ from datetime import UTC, date, datetime, timedelta
+@@ -252,10 +253,16 @@ def withdraw(
      description: str = "Cash withdrawal",
      at: datetime | None = None,
  ) -> int:
 +    account = _require(conn, account_id, amount)
 +    if account.balance_minor < amount.minor:
 +        raise InsufficientFunds(f"insufficient funds in {account.number}")
++    time.sleep(0.01)
      with write_txn(conn):
 -        account = _require(conn, account_id, amount)
 +        conn.execute(

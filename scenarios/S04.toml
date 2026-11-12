@@ -13,7 +13,7 @@ points = 5
 summary = "Concurrent withdrawals must never overdraw an account"
 acceptance_criteria = """
 AC1 | Two withdrawals of 80.00 from 100.00 started together succeed at most once | test_passes(test_{TOKEN}_concurrent_withdrawals_20_threads)
-AC2 | The balance never goes below 0.00 | test_passes(test_{TOKEN}_balance_never_negative)
+AC2 | The balance equals 100.00 minus the successful withdrawals and never goes below 0.00 | test_passes(test_{TOKEN}_balance_matches_withdrawals)
 """
 
 # S26: the first claim is false. The balance is read again, but still before the write lock is
@@ -23,16 +23,14 @@ name = "v1"
 commit = "fix(ledger): check the balance again before the withdrawal debit"
 claim = "fixed"
 steps = [
-  { replace = "src/bank/ledger.py", old = """    with write_txn(conn):
-        conn.execute(
-            "UPDATE accounts SET balance_minor = ? WHERE id = ?",""", new = """    fresh = conn.execute(
+  { replace = "src/bank/ledger.py", old = """    time.sleep(0.01)
+    with write_txn(conn):""", new = """    fresh = conn.execute(
         "SELECT balance_minor FROM accounts WHERE id = ?", (account.id,)
     ).fetchone()[0]
     if fresh < amount.minor:
         raise InsufficientFunds(f"insufficient funds in {account.number}")
-    with write_txn(conn):
-        conn.execute(
-            "UPDATE accounts SET balance_minor = ? WHERE id = ?",""" },
+    time.sleep(0.01)
+    with write_txn(conn):""" },
   { add_test = "scenarios/S04/test_withdraw_race.py.tmpl", dest = "tests/test_{token}_withdraw_race.py" },
 ]
 

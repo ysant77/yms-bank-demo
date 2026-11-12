@@ -215,14 +215,57 @@ class FailingUndo:
             raise __import__("sqlite3").OperationalError("undo failed")
 
 
-def test_a_failed_undo_does_not_hide_the_original_error():
+def test_a_failed_undo_raises_chained_to_the_original_error():
+    import sqlite3
+
     from bank.db import nesting_allowed, write_txn
 
     fake = FailingUndo()
-    with pytest.raises(ValueError, match="original"):
+    with pytest.raises(sqlite3.OperationalError, match="undo failed") as nested:
         with nesting_allowed(fake), write_txn(fake):
             raise ValueError("original")
+    assert isinstance(nested.value.__cause__, ValueError)
     fake.in_transaction = False
-    with pytest.raises(ValueError, match="original"):
+    with pytest.raises(sqlite3.OperationalError, match="undo failed") as outer:
         with write_txn(fake):
             raise ValueError("original")
+    assert isinstance(outer.value.__cause__, ValueError)
+
+
+class RollbackToFails(__import__("sqlite3").Connection):
+    """A real connection whose ROLLBACK TO fails, as a disk or I/O error might make it."""
+
+    def execute(self, sql, *args):
+        if sql.startswith("ROLLBACK TO"):
+            raise __import__("sqlite3").OperationalError("simulated ROLLBACK TO failure")
+        return super().execute(sql, *args)
+
+
+def test_a_failed_rollback_to_stops_the_job_and_commits_nothing(tmp_path):
+    """The job swallows the domain error, as seed_data.build does with InsufficientFunds; the
+    failed undo must still stop it, and the outer transaction must commit nothing."""
+    import sqlite3
+
+    from bank.db import write_txn
+    from bank.migrate import migrate_up
+
+    path = tmp_path / "undo.db"
+    ledger.open_db(path).close()
+    conn = sqlite3.connect(path, isolation_level=None, factory=RollbackToFails)
+    conn.row_factory = sqlite3.Row
+    migrate_up(conn)
+
+    def job(c):
+        ledger.create_customer(c, "Before The Failure")
+        try:
+            with write_txn(c):
+                c.execute("INSERT INTO customers (name, created_at) VALUES ('Partial', 'x')")
+                raise ledger.InsufficientFunds("no money")
+        except ledger.InsufficientFunds:
+            pass  # swallowed, as the seed does
+
+    with pytest.raises(sqlite3.OperationalError, match="simulated ROLLBACK TO failure"):
+        ledger.run_once(conn, "job", job)
+    assert not conn.in_transaction
+    assert ledger.list_customers(conn) == []
+    assert conn.execute("SELECT COUNT(*) FROM app_flags").fetchone()[0] == 0
