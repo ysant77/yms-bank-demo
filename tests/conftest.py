@@ -20,3 +20,11 @@ def at():
         return datetime.fromisoformat(f"{day}T{time}").replace(tzinfo=UTC)
 
     return make
+
+
+@pytest.fixture(scope="session")
+def fraud_run():
+    """The fraud score trained once per test session (synthetic data, fixed seed)."""
+    from fraud import model
+
+    return model.run()
