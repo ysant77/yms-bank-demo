@@ -75,8 +75,10 @@ jobs:
             echo '```'
           } > comment.md
           # Keep one report comment per pull request: edit the bot's earlier one if it exists.
+          # --jq runs once per page, so print every match and keep the last one.
           id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- aat-ci-report -->")))] | last | .id // empty')
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- aat-ci-report -->"))) | .id' \
+            | tail -n 1)
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
           else
