@@ -1,0 +1,44 @@
+id = "S04"
+title = "Double spend on concurrent withdrawals (with S26: a false fixed claim)"
+seed = "k1_race"
+base_branch = "test/s04-seed-withdraw-race"
+twin_branch = "fix/{key_lower}-withdraw-race"
+pr_title = "{KEY}: stop concurrent withdrawals from overdrawing"
+twin = "Raj"
+author = "scripted"
+
+[ticket]
+type = "Bug"
+points = 5
+summary = "Concurrent withdrawals must never overdraw an account"
+acceptance_criteria = """
+AC1 | Two withdrawals of 80.00 from 100.00 started together succeed at most once | test_passes(test_{TOKEN}_concurrent_withdrawals_20_threads)
+AC2 | The balance never goes below 0.00 | test_passes(test_{TOKEN}_balance_never_negative)
+"""
+
+# S26: the first claim is false. The check moves inside the transaction but still reads
+# before it holds the write lock, so concurrent withdrawals still race.
+[[attempts]]
+name = "v1"
+commit = "fix(ledger): check the balance again before the withdrawal debit"
+claim = "fixed"
+steps = [
+  { replace = "src/bank/ledger.py", old = """    conn.execute("BEGIN")
+    try:
+        conn.execute(""", new = """    conn.execute("BEGIN")
+    try:
+        fresh = conn.execute(
+            "SELECT balance_minor FROM accounts WHERE id = ?", (account.id,)
+        ).fetchone()[0]
+        if fresh < amount.minor:
+            raise InsufficientFunds(f"insufficient funds in {account.number}")
+        conn.execute(""" },
+  { add_test = "scenarios/S04/test_withdraw_race.py.tmpl", dest = "tests/test_{token}_withdraw_race.py" },
+]
+
+# The real fix: one write transaction from read to write, with a conditional debit.
+[[attempts]]
+name = "v2"
+commit = "fix(ledger): debit inside one write transaction with a conditional update"
+claim = "fixed"
+steps = [ { restore = "src/bank/ledger.py" } ]

@@ -1,0 +1,26 @@
+id = "S01"
+title = "Send button dead on small screens"
+seed = "k1_hidden_button"
+base_branch = "test/s01-seed-hidden-button"
+twin_branch = "fix/{key_lower}-send-button-small-screens"
+pr_title = "{KEY}: show the Send button on small screens"
+twin = "Ava"
+author = "scripted"
+
+[ticket]
+type = "Bug"
+points = 2
+summary = "Show the Send button on small screens"
+acceptance_criteria = """
+AC1 | On a 390 px wide window the Send button is visible | test_passes(test_{TOKEN}_send_button_visible_small_screen)
+AC2 | Sending 10.00 from a balance of 100.00 leaves 90.00 | test_passes(test_{TOKEN}_balance_after_send)
+"""
+
+[[attempts]]
+name = "v1"
+commit = "fix(web): show the Send button on small screens"
+claim = "fixed"
+steps = [
+  { revert_seed = true },
+  { add_test = "scenarios/S01/test_send_button.py.tmpl", dest = "tests/test_{token}_send_button.py" },
+]
