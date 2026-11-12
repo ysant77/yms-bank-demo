@@ -1,0 +1,13 @@
+diff --git a/src/fraud/data.py b/src/fraud/data.py
+index ad263bb..505b6d5 100644
+--- a/src/fraud/data.py
++++ b/src/fraud/data.py
+@@ -96,7 +96,7 @@ def chargeback_window(
+     keys = np.sort(cb_account_id.astype(np.int64) * shift + cb_ts.astype(np.int64))
+     base = account_id.astype(np.int64) * shift
+     start = ts.astype(np.int64) - days * DAY_S
+-    end = ts.astype(np.int64)
++    end = ts.astype(np.int64) + days * DAY_S
+     lo = np.searchsorted(keys, base + start, side="left")
+     hi = np.searchsorted(keys, base + end, side="left")
+     counts = hi - lo
