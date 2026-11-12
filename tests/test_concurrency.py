@@ -38,7 +38,8 @@ def test_concurrent_withdrawals_never_overdraw(tmp_path, run_together):
     final = ledger.get_account(setup, account.id).balance_minor
     assert len(results) == THREADS
     assert results.count("refused") + successes == THREADS, results
-    assert successes <= 1
+    # 100.00 covers one 80.00 withdrawal: exactly one must succeed, not zero and not more.
+    assert successes == 1, results
     assert final >= 0
     assert final == 10000 - 8000 * successes
     assert ledger.check_invariants(setup) == []
