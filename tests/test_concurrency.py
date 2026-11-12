@@ -6,7 +6,7 @@ from bank.money import Money
 THREADS = 20
 
 
-def test_concurrent_withdrawals_never_overdraw(tmp_path):
+def test_concurrent_withdrawals_never_overdraw(tmp_path, run_together):
     """20 threads withdraw 80.00 from 100.00 at once: at most one may succeed."""
     path = tmp_path / "race.db"
     setup = ledger.open_db(path)
@@ -14,14 +14,13 @@ def test_concurrent_withdrawals_never_overdraw(tmp_path):
     account = ledger.open_account(setup, customer, "EUR")
     ledger.deposit(setup, account.id, Money.of("100.00", "EUR"))
 
-    barrier = threading.Barrier(THREADS)
     results: list[str] = []
     lock = threading.Lock()
 
-    def worker():
+    def worker(start):
         conn = ledger.open_db(path)
         try:
-            barrier.wait()
+            start()
             try:
                 ledger.withdraw(conn, account.id, Money.of("80.00", "EUR"))
                 outcome = "ok"
@@ -34,12 +33,7 @@ def test_concurrent_withdrawals_never_overdraw(tmp_path):
         with lock:
             results.append(outcome)
 
-    threads = [threading.Thread(target=worker) for _ in range(THREADS)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
+    assert run_together(THREADS, worker) == []
     successes = results.count("ok")
     final = ledger.get_account(setup, account.id).balance_minor
     assert len(results) == THREADS

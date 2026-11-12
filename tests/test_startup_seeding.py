@@ -1,7 +1,5 @@
 """Startup seeding: one worker seeds; a failed seed is retried on the next start."""
 
-import threading
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -27,26 +25,16 @@ def start(path):
         pass
 
 
-def test_two_workers_starting_together_seed_once(tmp_path, monkeypatch):
+def test_two_workers_starting_together_seed_once(tmp_path, monkeypatch, run_together):
     monkeypatch.setattr(api.seed_data, "build", small_build)
     path = tmp_path / "demo.db"
     ledger.open_db(path).close()
-    barrier = threading.Barrier(2)
-    errors = []
 
-    def worker():
-        try:
-            barrier.wait()
-            start(path)
-        except Exception as exc:  # noqa: BLE001 - reported by the assertion
-            errors.append(repr(exc))
+    def worker(begin):
+        begin()
+        start(path)
 
-    threads = [threading.Thread(target=worker) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert errors == []
+    assert run_together(2, worker) == []
     assert customer_count(path) == 4
 
 

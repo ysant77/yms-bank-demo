@@ -27,16 +27,15 @@ def entries(conn):
     ]
 
 
-def test_concurrent_requests_with_one_key_move_money_once(accounts):
+def test_concurrent_requests_with_one_key_move_money_once(accounts, run_together):
     path, conn, owner, source, target = accounts
-    barrier = threading.Barrier(8)
     outcomes = []
     lock = threading.Lock()
 
-    def worker():
+    def worker(start):
         c = ledger.open_db(path)
         try:
-            barrier.wait()
+            start()
             result, replayed = ledger.transfer_once(
                 c, owner, "same-key", source.id, target.id, Money.of("10.00", "EUR")
             )
@@ -45,11 +44,7 @@ def test_concurrent_requests_with_one_key_move_money_once(accounts):
         finally:
             c.close()
 
-    threads = [threading.Thread(target=worker) for _ in range(8)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    assert run_together(8, worker) == []
     assert len(outcomes) == 8
     assert len({entry for entry, _ in outcomes}) == 1
     assert [replayed for _, replayed in outcomes].count(False) == 1
