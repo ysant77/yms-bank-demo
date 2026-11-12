@@ -1,9 +1,9 @@
 {
   "schema": "aat-ci-report/1",
   "repository": "ysant77/yms-bank-demo",
-  "head_sha": "13d2d863b0229ea2427f68ca491af75218fc990d",
-  "base_sha": "d7a6998b1d0bd0b7974028c3bb81d65525bb5ef6",
-  "generated_at": "2026-11-12T08:36:49Z",
+  "head_sha": "0e75e834232f2dc6e3f7864d5adfaddb332876cb",
+  "base_sha": "13d2d863b0229ea2427f68ca491af75218fc990d",
+  "generated_at": "2026-11-12T09:26:31Z",
   "workflow_files": {
     ".github/workflows/ci.yml": "391a8bf685d0290dea87128b83373adbe7737f72b9d53559aebbfb7106b9a949"
   },
@@ -11,252 +11,252 @@
     {
       "id": "tests/test_api.py::test_session_cookie_and_unknown_customer",
       "outcome": "passed",
-      "duration_s": 0.038252
+      "duration_s": 0.042995
     },
     {
       "id": "tests/test_api.py::test_customer_list_for_demo_chooser",
       "outcome": "passed",
-      "duration_s": 0.015847
+      "duration_s": 0.017963
     },
     {
       "id": "tests/test_api.py::test_list_accounts_shows_only_own",
       "outcome": "passed",
-      "duration_s": 0.019874
+      "duration_s": 0.025072
     },
     {
       "id": "tests/test_api.py::test_every_account_route_checks_the_owner",
       "outcome": "passed",
-      "duration_s": 0.053876
+      "duration_s": 0.060355
     },
     {
       "id": "tests/test_api.py::test_statement_end_date_is_inclusive",
       "outcome": "passed",
-      "duration_s": 0.021243
+      "duration_s": 0.023699
     },
     {
       "id": "tests/test_api.py::test_statement_rejects_bad_dates",
       "outcome": "passed",
-      "duration_s": 0.024128
+      "duration_s": 0.027841
     },
     {
       "id": "tests/test_api.py::test_transfer_success",
       "outcome": "passed",
-      "duration_s": 0.029153
+      "duration_s": 0.03151
     },
     {
       "id": "tests/test_api.py::test_transfer_from_foreign_account_is_404",
       "outcome": "passed",
-      "duration_s": 0.023014
+      "duration_s": 0.024699
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[100.01-YMS-0000-0003-409]",
       "outcome": "passed",
-      "duration_s": 0.025699
+      "duration_s": 0.027407
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.001-YMS-0000-0003-400]",
       "outcome": "passed",
-      "duration_s": 0.023805
+      "duration_s": 0.025369
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[0-YMS-0000-0003-400]",
       "outcome": "passed",
-      "duration_s": 0.024587
+      "duration_s": 0.026259
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-9999-9999-404]",
       "outcome": "passed",
-      "duration_s": 0.023504
+      "duration_s": 0.025202
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-CLR-EUR-404]",
       "outcome": "passed",
-      "duration_s": 0.02423
+      "duration_s": 0.02536
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-0000-0002-400]",
       "outcome": "passed",
-      "duration_s": 0.025407
+      "duration_s": 0.030031
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-0000-0001-400]",
       "outcome": "passed",
-      "duration_s": 0.023655
+      "duration_s": 0.025468
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[-5-YMS-0000-0003-422]",
       "outcome": "passed",
-      "duration_s": 0.025305
+      "duration_s": 0.024555
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1e3-YMS-0000-0003-422]",
       "outcome": "passed",
-      "duration_s": 0.025646
+      "duration_s": 0.025237
     },
     {
       "id": "tests/test_bench.py::test_transfer_throughput",
       "outcome": "passed",
-      "duration_s": 0.1054
+      "duration_s": 0.105194
     },
     {
       "id": "tests/test_ci_report.py::test_report_follows_the_format",
       "outcome": "passed",
-      "duration_s": 0.072334
+      "duration_s": 0.073487
     },
     {
       "id": "tests/test_ci_report.py::test_shas_fall_back_to_git",
       "outcome": "passed",
-      "duration_s": 0.046309
+      "duration_s": 0.047282
     },
     {
       "id": "tests/test_ci_report.py::test_no_report_without_option",
       "outcome": "passed",
-      "duration_s": 0.030729
+      "duration_s": 0.031366
     },
     {
       "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[fast]",
       "outcome": "passed",
-      "duration_s": 0.000387
+      "duration_s": 0.000361
     },
     {
       "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[True]",
       "outcome": "passed",
-      "duration_s": 0.000306
+      "duration_s": 0.000326
     },
     {
       "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[nan]",
       "outcome": "passed",
-      "duration_s": 0.000357
+      "duration_s": 0.000354
     },
     {
       "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[None]",
       "outcome": "passed",
-      "duration_s": 0.000329
+      "duration_s": 0.000334
     },
     {
       "id": "tests/test_ci_report.py::test_sql_operations_ignore_comments_and_clauses",
       "outcome": "passed",
-      "duration_s": 0.000229
+      "duration_s": 0.000244
     },
     {
       "id": "tests/test_ci_report.py::test_record_metric_fixture_is_available",
       "outcome": "passed",
-      "duration_s": 0.000296
+      "duration_s": 0.000362
     },
     {
       "id": "tests/test_ci_report.py::test_audit_vulnerabilities_counts_pip_audit_json",
       "outcome": "passed",
-      "duration_s": 0.000733
+      "duration_s": 0.000806
     },
     {
       "id": "tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw",
       "outcome": "passed",
-      "duration_s": 0.068529
+      "duration_s": 0.094571
     },
     {
       "id": "tests/test_ledger.py::test_account_numbers_are_obviously_fake",
       "outcome": "passed",
-      "duration_s": 0.005507
+      "duration_s": 0.005484
     },
     {
       "id": "tests/test_ledger.py::test_deposit_and_withdraw_keep_books_balanced",
       "outcome": "passed",
-      "duration_s": 0.005407
+      "duration_s": 0.006403
     },
     {
       "id": "tests/test_ledger.py::test_transfer_moves_money",
       "outcome": "passed",
-      "duration_s": 0.005499
+      "duration_s": 0.005969
     },
     {
       "id": "tests/test_ledger.py::test_overdraw_is_refused_and_nothing_is_written",
       "outcome": "passed",
-      "duration_s": 0.00537
+      "duration_s": 0.005788
     },
     {
       "id": "tests/test_ledger.py::test_withdraw_whole_balance_is_allowed",
       "outcome": "passed",
-      "duration_s": 0.005062
+      "duration_s": 0.005675
     },
     {
       "id": "tests/test_ledger.py::test_currency_mismatch_and_bad_amounts",
       "outcome": "passed",
-      "duration_s": 0.005388
+      "duration_s": 0.005511
     },
     {
       "id": "tests/test_ledger.py::test_clearing_account_cannot_be_used_directly",
       "outcome": "passed",
-      "duration_s": 0.005347
+      "duration_s": 0.005208
     },
     {
       "id": "tests/test_ledger.py::test_database_refuses_negative_customer_balance",
       "outcome": "passed",
-      "duration_s": 0.005267
+      "duration_s": 0.006132
     },
     {
       "id": "tests/test_ledger.py::test_invariant_check_finds_tampering",
       "outcome": "passed",
-      "duration_s": 0.005352
+      "duration_s": 0.005832
     },
     {
       "id": "tests/test_ledger.py::test_statement_running_balance",
       "outcome": "passed",
-      "duration_s": 0.005816
+      "duration_s": 0.006329
     },
     {
       "id": "tests/test_ledger.py::test_statement_end_date_is_inclusive",
       "outcome": "passed",
-      "duration_s": 0.005421
+      "duration_s": 0.005708
     },
     {
       "id": "tests/test_ledger.py::test_statement_rejects_reversed_range",
       "outcome": "passed",
-      "duration_s": 0.005392
+      "duration_s": 0.004972
     },
     {
       "id": "tests/test_migrate.py::test_up_applies_all_in_order_and_is_idempotent",
       "outcome": "passed",
-      "duration_s": 0.003647
+      "duration_s": 0.004623
     },
     {
       "id": "tests/test_migrate.py::test_down_to_target_then_up_again",
       "outcome": "passed",
-      "duration_s": 0.005659
+      "duration_s": 0.006042
     },
     {
       "id": "tests/test_migrate.py::test_failed_migration_rolls_back",
       "outcome": "passed",
-      "duration_s": 0.00325
+      "duration_s": 0.003331
     },
     {
       "id": "tests/test_migrate.py::test_malformed_files_are_rejected[1_short.sql--- migrate:up\\nSELECT 1;\\n-- migrate:down\\nSELECT 1;\\n]",
       "outcome": "passed",
-      "duration_s": 0.000845
+      "duration_s": 0.000835
     },
     {
       "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_no_down.sql--- migrate:up\\nSELECT 1;\\n]",
       "outcome": "passed",
-      "duration_s": 0.000866
+      "duration_s": 0.000838
     },
     {
       "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_down_first.sql--- migrate:down\\nSELECT 1;\\n-- migrate:up\\nSELECT 1;\\n]",
       "outcome": "passed",
-      "duration_s": 0.000844
+      "duration_s": 0.000838
     },
     {
       "id": "tests/test_money.py::test_eur_has_two_decimals",
       "outcome": "passed",
-      "duration_s": 0.000208
+      "duration_s": 0.000205
     },
     {
       "id": "tests/test_money.py::test_jpy_has_no_minor_unit",
       "outcome": "passed",
-      "duration_s": 0.000236
+      "duration_s": 0.000189
     },
     {
       "id": "tests/test_money.py::test_bhd_has_three_decimals",
       "outcome": "passed",
-      "duration_s": 0.000191
+      "duration_s": 0.000185
     },
     {
       "id": "tests/test_money.py::test_half_even_rounding",
@@ -266,122 +266,147 @@
     {
       "id": "tests/test_money.py::test_float_is_rejected",
       "outcome": "passed",
-      "duration_s": 0.000198
+      "duration_s": 0.000188
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[BHD]",
       "outcome": "passed",
-      "duration_s": 0.000327
+      "duration_s": 0.000277
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[EUR]",
       "outcome": "passed",
-      "duration_s": 0.000278
+      "duration_s": 0.000264
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[GBP]",
       "outcome": "passed",
-      "duration_s": 0.000283
+      "duration_s": 0.000293
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[JPY]",
       "outcome": "passed",
-      "duration_s": 0.000305
+      "duration_s": 0.000262
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[KRW]",
       "outcome": "passed",
-      "duration_s": 0.000277
+      "duration_s": 0.000288
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[KWD]",
       "outcome": "passed",
-      "duration_s": 0.000313
+      "duration_s": 0.000255
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[SGD]",
       "outcome": "passed",
-      "duration_s": 0.003757
+      "duration_s": 0.004289
     },
     {
       "id": "tests/test_money.py::test_round_trip_all_currencies[USD]",
       "outcome": "passed",
-      "duration_s": 0.00029
+      "duration_s": 0.000308
     },
     {
       "id": "tests/test_money.py::test_money_add_and_mismatch",
       "outcome": "passed",
-      "duration_s": 0.000273
+      "duration_s": 0.000229
     },
     {
       "id": "tests/test_money.py::test_str_shows_major_units",
       "outcome": "passed",
-      "duration_s": 0.000206
+      "duration_s": 0.000231
     },
     {
       "id": "tests/test_seed_data.py::test_same_seed_gives_same_data",
       "outcome": "passed",
-      "duration_s": 0.024586
+      "duration_s": 0.024668
     },
     {
       "id": "tests/test_seed_data.py::test_cli_builds_full_demo_database",
       "outcome": "passed",
-      "duration_s": 0.324539
+      "duration_s": 0.348016
     },
     {
       "id": "tests/test_seed_data.py::test_cli_refuses_to_overwrite",
       "outcome": "passed",
-      "duration_s": 0.001421
+      "duration_s": 0.001542
+    },
+    {
+      "id": "tests/test_seed_data.py::test_full_seed_keeps_every_running_balance_non_negative",
+      "outcome": "passed",
+      "duration_s": 0.336013
+    },
+    {
+      "id": "tests/test_seed_data.py::test_default_seed_ends_the_day_before_now",
+      "outcome": "passed",
+      "duration_s": 0.012671
+    },
+    {
+      "id": "tests/test_seed_data.py::test_entries_after_now_are_cut_and_the_summary_says_so",
+      "outcome": "passed",
+      "duration_s": 0.019021
+    },
+    {
+      "id": "tests/test_seed_data.py::test_invariants_catch_a_posting_before_the_opening",
+      "outcome": "passed",
+      "duration_s": 0.005628
+    },
+    {
+      "id": "tests/test_seed_data.py::test_invariants_catch_a_negative_running_balance",
+      "outcome": "passed",
+      "duration_s": 0.005664
     },
     {
       "id": "tests/test_web.py::test_send_button_not_hidden_at_or_below_430px",
       "outcome": "passed",
-      "duration_s": 0.001511
+      "duration_s": 0.001626
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 430px) { .x #send-button { display: none } }-True]",
       "outcome": "passed",
-      "duration_s": 0.000407
+      "duration_s": 0.000456
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 600px) { button.btn-primary { display:none; } }-True]",
       "outcome": "passed",
-      "duration_s": 0.000369
+      "duration_s": 0.000388
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (min-width: 431px) { #send-button { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000366
+      "duration_s": 0.000369
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 430px) { .hide-small { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000374
+      "duration_s": 0.000426
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media print { #send-button { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000342
+      "duration_s": 0.000352
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[/* #send-button { display: none } */ .btn { color: red }-False]",
       "outcome": "passed",
-      "duration_s": 0.000375
+      "duration_s": 0.000342
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[#send-button:disabled { display: none }-True]",
       "outcome": "passed",
-      "duration_s": 0.00036
+      "duration_s": 0.000399
     },
     {
       "id": "tests/test_web.py::test_pages_are_served_without_external_assets",
       "outcome": "passed",
-      "duration_s": 0.023765
+      "duration_s": 0.024366
     }
   ],
   "metrics": {
     "audit_vulns": 0,
-    "transfers_per_s": 10033.1
+    "transfers_per_s": 10389.9
   },
   "deps": {
     "annotated-doc": "0.0.6",
