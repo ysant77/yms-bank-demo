@@ -87,7 +87,10 @@ def statements(script: str) -> list[str]:
             if current.strip():
                 parts.append(current.strip())
             current = ""
-    if current.strip():
+    leftover = [
+        line for line in current.splitlines() if line.strip() and not line.strip().startswith("--")
+    ]
+    if leftover:
         raise ValueError("migration ends with an incomplete statement")
     return parts
 

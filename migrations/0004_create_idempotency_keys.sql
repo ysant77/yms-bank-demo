@@ -4,6 +4,7 @@ CREATE TABLE idempotency_keys (
     key TEXT NOT NULL,
     request_hash TEXT NOT NULL,
     entry_id INTEGER NOT NULL REFERENCES journal_entries (id),
+    response_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (customer_id, key)
 );

@@ -134,6 +134,18 @@ def test_statement_rejects_reversed_range(conn, two_accounts):
         ledger.statement(conn, a.id, date(2026, 5, 2), date(2026, 5, 1))
 
 
-def test_claim_flag_is_true_only_once(conn):
-    assert ledger.claim_flag(conn, "demo_seeded") is True
-    assert ledger.claim_flag(conn, "demo_seeded") is False
+def test_claim_flag_is_held_by_one_caller_until_finished(conn):
+    assert ledger.claim_flag(conn, "job") is True
+    assert ledger.claim_flag(conn, "job") is False
+    ledger.finish_flag(conn, "job")
+    assert ledger.claim_flag(conn, "job") is False
+
+
+def test_a_released_or_stale_claim_can_be_taken_again(conn):
+    from datetime import UTC, datetime, timedelta
+
+    assert ledger.claim_flag(conn, "job") is True
+    ledger.release_flag(conn, "job")
+    assert ledger.claim_flag(conn, "job") is True
+    later = datetime.now(UTC) + timedelta(seconds=ledger.CLAIM_LEASE_SECONDS + 60)
+    assert ledger.claim_flag(conn, "job", now=later) is True

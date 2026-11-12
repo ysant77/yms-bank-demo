@@ -12,6 +12,8 @@ only succeeds when the funds are there, so concurrent withdrawals cannot overdra
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -293,49 +295,110 @@ class IdempotencyConflict(LedgerError):
     """The idempotency key was already used for a different request."""
 
 
+IDEMPOTENCY_WINDOW_SECONDS = 24 * 60 * 60
+
+
+def request_fingerprint(
+    from_account_id: int, to_account_id: int, amount: Money, reference: str | None
+) -> str:
+    """Hash of the transfer's meaning, so "10.0" and "10.00" are the same request."""
+    canonical = json.dumps(
+        [from_account_id, to_account_id, amount.minor, amount.currency, reference or ""],
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def transfer_once(
     conn: sqlite3.Connection,
     customer_id: int,
     key: str,
-    request_hash: str,
     from_account_id: int,
     to_account_id: int,
     amount: Money,
     reference: str | None = None,
-) -> tuple[int, bool]:
-    """Post a transfer at most once per (customer, key).
+    now: datetime | None = None,
+) -> tuple[dict[str, object], bool]:
+    """Post a transfer at most once per (customer, key) within 24 hours.
 
     The key is checked and stored in the same write transaction as the postings, so a retry
-    after a timeout returns the first entry instead of moving money twice. Returns
-    ``(entry_id, replayed)``.
+    after a timeout returns the first result instead of moving money twice. The stored result
+    is the one the first request saw, so a replay does not show later balances. A failed
+    attempt (for example insufficient funds) stores nothing, so the client may retry it.
+    Returns ``(result, replayed)``.
     """
     if from_account_id == to_account_id:
         raise LedgerError("cannot transfer to the same account")
+    now = now or datetime.now(UTC)
+    fingerprint = request_fingerprint(from_account_id, to_account_id, amount, reference)
+    oldest = timestamp(now - timedelta(seconds=IDEMPOTENCY_WINDOW_SECONDS))
     with write_txn(conn):
+        conn.execute(
+            "DELETE FROM idempotency_keys WHERE customer_id = ? AND key = ? AND created_at < ?",
+            (customer_id, key, oldest),
+        )
         row = conn.execute(
-            "SELECT request_hash, entry_id FROM idempotency_keys WHERE customer_id = ? AND key = ?",
+            "SELECT request_hash, response_json FROM idempotency_keys"
+            " WHERE customer_id = ? AND key = ?",
             (customer_id, key),
         ).fetchone()
         if row is not None:
-            if row["request_hash"] != request_hash:
+            if row["request_hash"] != fingerprint:
                 raise IdempotencyConflict("idempotency key already used for a different request")
-            return row["entry_id"], True
-        entry_id = _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, None)
+            return json.loads(row["response_json"]), True
+        entry_id = _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, now)
+        result = {
+            "entry_id": entry_id,
+            "to_account_number": get_account(conn, to_account_id).number,
+            "amount_minor": amount.minor,
+            "currency": amount.currency,
+            "from_balance_minor": get_account(conn, from_account_id).balance_minor,
+        }
         conn.execute(
-            "INSERT INTO idempotency_keys (customer_id, key, request_hash, entry_id, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (customer_id, key, request_hash, entry_id, timestamp()),
+            "INSERT INTO idempotency_keys"
+            " (customer_id, key, request_hash, entry_id, response_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (customer_id, key, fingerprint, entry_id, json.dumps(result), timestamp(now)),
         )
-        return entry_id, False
+        return result, False
 
 
-def claim_flag(conn: sqlite3.Connection, name: str) -> bool:
-    """Set a one-time flag; True only for the single caller that set it."""
+CLAIM_LEASE_SECONDS = 600
+
+
+def claim_flag(conn: sqlite3.Connection, name: str, now: datetime | None = None) -> bool:
+    """Claim a one-time job. True for exactly one caller at a time.
+
+    A claim that is not finished within ``CLAIM_LEASE_SECONDS`` (its worker died) can be taken
+    over; a finished job is never claimed again.
+    """
+    now = now or datetime.now(UTC)
+    stale = timestamp(now - timedelta(seconds=CLAIM_LEASE_SECONDS))
     with write_txn(conn):
-        cursor = conn.execute(
-            "INSERT OR IGNORE INTO app_flags (name, set_at) VALUES (?, ?)", (name, timestamp())
+        row = conn.execute("SELECT state, set_at FROM app_flags WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            conn.execute(
+                "INSERT INTO app_flags (name, state, set_at) VALUES (?, 'claimed', ?)",
+                (name, timestamp(now)),
+            )
+            return True
+        if row["state"] == "claimed" and row["set_at"] < stale:
+            conn.execute("UPDATE app_flags SET set_at = ? WHERE name = ?", (timestamp(now), name))
+            return True
+        return False
+
+
+def finish_flag(conn: sqlite3.Connection, name: str) -> None:
+    with write_txn(conn):
+        conn.execute(
+            "UPDATE app_flags SET state = 'done', set_at = ? WHERE name = ?", (timestamp(), name)
         )
-        return cursor.rowcount == 1
+
+
+def release_flag(conn: sqlite3.Connection, name: str) -> None:
+    """Give up an unfinished claim so the next start can try again."""
+    with write_txn(conn):
+        conn.execute("DELETE FROM app_flags WHERE name = ? AND state = 'claimed'", (name,))
 
 
 def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date) -> Statement:

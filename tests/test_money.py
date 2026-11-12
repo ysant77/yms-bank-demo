@@ -50,3 +50,9 @@ def test_money_of_rejects_extra_decimals():
     with pytest.raises(ValueError):
         Money.of("1.5", "JPY")
     assert Money.of("1.50", "EUR") == Money(150, "EUR")
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "abc"])
+def test_money_of_rejects_non_numbers(value):
+    with pytest.raises(ValueError):
+        Money.of(value, "EUR")

@@ -191,7 +191,42 @@ def test_wrong_currency_destination_does_not_reveal_its_currency(bank):
     assert "JPY" not in response.text and "holds" not in response.text
 
 
-@pytest.mark.parametrize("query", ["?to=9999-12-31", "?from=0001-01-01&to=2026-05-01"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?to=9999-12-31",
+        "?to=9999-01-01",  # inside date arithmetic range: only the API bound rejects it
+        "?from=1899-12-31&to=2026-05-01",
+        "?from=0001-01-01&to=2026-05-01",
+    ],
+)
 def test_statement_dates_out_of_range_are_400(bank, query):
     client = login(bank["app"], bank["owner"])
     assert client.get(f"/api/accounts/{bank['eur'].id}/statement{query}").status_code == 400
+
+
+def test_the_same_key_is_scoped_to_each_customer(bank):
+    owner = login(bank["app"], bank["owner"])
+    other = login(bank["app"], bank["other"])
+    eur_number = ledger.get_account(ledger.open_db(bank["path"]), bank["eur"].id).number
+    first = transfer(owner, bank["eur"].id, bank["foreign"].number, "1.00", key="shared")
+    second = transfer(other, bank["foreign"].id, eur_number, "2.00", key="shared")
+    assert first.status_code == 201 and second.status_code == 201
+    assert second.json()["replayed"] is False
+    assert owner.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "101.00"
+
+
+def test_amount_spelling_does_not_change_the_request(bank):
+    client = login(bank["app"], bank["owner"])
+    first = transfer(client, bank["eur"].id, bank["foreign"].number, "10.0", key="spell")
+    again = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="spell")
+    assert first.status_code == 201 and again.status_code == 200
+
+
+def test_a_replay_returns_the_original_result(bank):
+    client = login(bank["app"], bank["owner"])
+    first = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="orig")
+    transfer(client, bank["eur"].id, bank["foreign"].number, "5.00", key="later")
+    again = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="orig")
+    assert again.json()["from_account"]["balance"] == first.json()["from_account"]["balance"]
+    assert again.json()["from_account"]["balance"] == "90.00"

@@ -72,6 +72,14 @@ def test_statements_split_on_complete_sql():
     ]
 
 
+def test_a_trailing_comment_is_not_an_incomplete_statement():
+    assert migrate.statements("CREATE TABLE a (x);\n-- end of migration\n") == [
+        "CREATE TABLE a (x);"
+    ]
+    with pytest.raises(ValueError):
+        migrate.statements("CREATE TABLE a (x)\n")
+
+
 def test_failed_migration_rolls_back(tmp_path):
     folder = tmp_path / "migrations"
     folder.mkdir()

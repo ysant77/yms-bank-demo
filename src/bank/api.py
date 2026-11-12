@@ -9,8 +9,6 @@ through ``owned_account``, which answers 404 for accounts of other customers.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import sqlite3
 from collections.abc import AsyncIterator, Iterator
@@ -33,6 +31,7 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 STATEMENT_DAYS = 30
 EARLIEST_DATE = date(1900, 1, 1)
 LATEST_DATE = date(9998, 12, 31)
+SEED_FLAG = "demo_seeded"
 NO_DESTINATION = "destination account not found or cannot receive this transfer"
 
 
@@ -115,13 +114,19 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conn = ledger.open_db(path)
         try:
-            # Several workers may start at once: only the one that claims the flag seeds.
+            # Several workers may start at once: only the one that claims the job seeds. If
+            # seeding fails, the claim is released so the next start tries again.
             if (
                 seed_if_empty
                 and not ledger.list_customers(conn)
-                and ledger.claim_flag(conn, "demo_seeded")
+                and ledger.claim_flag(conn, SEED_FLAG)
             ):
-                seed_data.build(conn)
+                try:
+                    seed_data.build(conn)
+                except BaseException:
+                    ledger.release_flag(conn, SEED_FLAG)
+                    raise
+                ledger.finish_flag(conn, SEED_FLAG)
         finally:
             conn.close()
         yield
@@ -216,15 +221,11 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
         if target is None or target.kind != "customer" or target.currency != source.currency:
             raise HTTPException(404, NO_DESTINATION)
         amount = parse_amount(body.amount, source.currency)
-        request_hash = hashlib.sha256(
-            json.dumps(body.model_dump(), sort_keys=True).encode("utf-8")
-        ).hexdigest()
         try:
-            entry_id, replayed = ledger.transfer_once(
+            result, replayed = ledger.transfer_once(
                 conn,
                 customer_id,
                 idempotency_key.strip(),
-                request_hash,
                 source.id,
                 target.id,
                 amount,
@@ -238,13 +239,17 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
             raise HTTPException(400, str(exc)) from None
         if replayed:
             response.status_code = 200
+        # The account as it was right after this transfer, also on a replay.
+        from_account = account_json(source) | money_fields(
+            "balance", int(result["from_balance_minor"]), source.currency
+        )
         return {
-            "entry_id": entry_id,
+            "entry_id": result["entry_id"],
             "replayed": replayed,
-            "to_account_number": target.number,
-            **money_fields("amount", amount.minor, amount.currency),
-            "currency": amount.currency,
-            "from_account": account_json(ledger.get_account(conn, source.id)),
+            "to_account_number": result["to_account_number"],
+            **money_fields("amount", int(result["amount_minor"]), str(result["currency"])),
+            "currency": result["currency"],
+            "from_account": from_account,
         }
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

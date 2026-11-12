@@ -132,21 +132,32 @@ async function sendTransfer(event) {
     reference: data.reference.trim() || null,
   };
   button.disabled = true;
-  // One key per form submission: a retry of the same submission cannot move money twice.
-  form.dataset.idempotencyKey ||= crypto.randomUUID();
+  // The key belongs to this exact request: a retry of the same request reuses it and cannot
+  // move money twice; an edited request gets a new key.
+  const bodyText = JSON.stringify(body);
+  if (form.dataset.idempotencyBody !== bodyText) {
+    form.dataset.idempotencyKey = crypto.randomUUID();
+    form.dataset.idempotencyBody = bodyText;
+  }
   try {
     const result = await api("/api/transfers", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: bodyText,
       headers: { "Content-Type": "application/json", "Idempotency-Key": form.dataset.idempotencyKey },
     });
     delete form.dataset.idempotencyKey;
+    delete form.dataset.idempotencyBody;
     status.className = "notice notice-ok";
     status.textContent = `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`;
     form.amount.value = "";
     form.reference.value = "";
     await renderTransfer();
   } catch (error) {
+    // 422 means the key was refused for this body: start over with a new key next time.
+    if (error.status === 422) {
+      delete form.dataset.idempotencyKey;
+      delete form.dataset.idempotencyBody;
+    }
     status.className = "notice notice-error";
     status.textContent = `Transfer failed: ${error.message}`;
   } finally {
