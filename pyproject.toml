@@ -17,6 +17,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/bank"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "bank/migrations"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
