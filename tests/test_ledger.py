@@ -132,3 +132,8 @@ def test_statement_rejects_reversed_range(conn, two_accounts):
     a, _ = two_accounts
     with pytest.raises(ledger.LedgerError):
         ledger.statement(conn, a.id, date(2026, 5, 2), date(2026, 5, 1))
+
+
+def test_claim_flag_is_true_only_once(conn):
+    assert ledger.claim_flag(conn, "demo_seeded") is True
+    assert ledger.claim_flag(conn, "demo_seeded") is False

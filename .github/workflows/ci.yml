@@ -25,7 +25,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           uv export --locked --no-hashes --no-emit-project --format requirements-txt -q > requirements-audit.txt
-          if ! uvx --from 'pip-audit==2.9.0' pip-audit -r requirements-audit.txt --no-deps --disable-pip \
+          if ! uv run --locked pip-audit -r requirements-audit.txt --no-deps --disable-pip \
                --format json -o audit.json; then
             echo "AUDIT_FAILED=1" >> "$GITHUB_ENV"
           fi
@@ -74,7 +74,14 @@ jobs:
             echo
             echo '```'
           } > comment.md
-          gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          # Keep one report comment per pull request: edit the bot's earlier one if it exists.
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- aat-ci-report -->")))] | last | .id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          fi
 
   # Publishes the default branch report to the ci-reports branch as main.json.
   publish-main-report:

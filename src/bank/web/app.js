@@ -132,8 +132,15 @@ async function sendTransfer(event) {
     reference: data.reference.trim() || null,
   };
   button.disabled = true;
+  // One key per form submission: a retry of the same submission cannot move money twice.
+  form.dataset.idempotencyKey ||= crypto.randomUUID();
   try {
-    const result = await api("/api/transfers", { method: "POST", body: JSON.stringify(body) });
+    const result = await api("/api/transfers", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json", "Idempotency-Key": form.dataset.idempotencyKey },
+    });
+    delete form.dataset.idempotencyKey;
     status.className = "notice notice-ok";
     status.textContent = `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`;
     form.amount.value = "";

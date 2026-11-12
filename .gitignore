@@ -14,4 +14,3 @@ dist/
 ci-report.json
 requirements-audit.txt
 audit.json
-ci-report.json

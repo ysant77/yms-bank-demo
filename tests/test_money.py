@@ -42,3 +42,11 @@ def test_money_add_and_mismatch():
 def test_str_shows_major_units():
     assert str(Money(500000, "JPY")) == "500000 JPY"
     assert from_minor(5, "EUR") == Decimal("0.05")
+
+
+def test_money_of_rejects_extra_decimals():
+    with pytest.raises(ValueError):
+        Money.of("1.005", "EUR")
+    with pytest.raises(ValueError):
+        Money.of("1.5", "JPY")
+    assert Money.of("1.50", "EUR") == Money(150, "EUR")

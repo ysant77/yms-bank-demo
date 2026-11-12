@@ -258,6 +258,23 @@ def withdraw(
         return _post(conn, "withdrawal", description, amount.currency, lines, at)
 
 
+def _transfer_in_txn(
+    conn: sqlite3.Connection,
+    from_account_id: int,
+    to_account_id: int,
+    amount: Money,
+    reference: str | None,
+    at: datetime | None,
+) -> int:
+    source = _require(conn, from_account_id, amount)
+    target = _require(conn, to_account_id, amount)
+    _debit(conn, source, amount.minor)
+    _credit(conn, target.id, amount.minor)
+    lines = [(source.id, -amount.minor), (target.id, amount.minor)]
+    description = f"Transfer {source.number} to {target.number}"
+    return _post(conn, "transfer", description, amount.currency, lines, at, reference)
+
+
 def transfer(
     conn: sqlite3.Connection,
     from_account_id: int,
@@ -269,13 +286,56 @@ def transfer(
     if from_account_id == to_account_id:
         raise LedgerError("cannot transfer to the same account")
     with write_txn(conn):
-        source = _require(conn, from_account_id, amount)
-        target = _require(conn, to_account_id, amount)
-        _debit(conn, source, amount.minor)
-        _credit(conn, target.id, amount.minor)
-        lines = [(source.id, -amount.minor), (target.id, amount.minor)]
-        description = f"Transfer {source.number} to {target.number}"
-        return _post(conn, "transfer", description, amount.currency, lines, at, reference)
+        return _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, at)
+
+
+class IdempotencyConflict(LedgerError):
+    """The idempotency key was already used for a different request."""
+
+
+def transfer_once(
+    conn: sqlite3.Connection,
+    customer_id: int,
+    key: str,
+    request_hash: str,
+    from_account_id: int,
+    to_account_id: int,
+    amount: Money,
+    reference: str | None = None,
+) -> tuple[int, bool]:
+    """Post a transfer at most once per (customer, key).
+
+    The key is checked and stored in the same write transaction as the postings, so a retry
+    after a timeout returns the first entry instead of moving money twice. Returns
+    ``(entry_id, replayed)``.
+    """
+    if from_account_id == to_account_id:
+        raise LedgerError("cannot transfer to the same account")
+    with write_txn(conn):
+        row = conn.execute(
+            "SELECT request_hash, entry_id FROM idempotency_keys WHERE customer_id = ? AND key = ?",
+            (customer_id, key),
+        ).fetchone()
+        if row is not None:
+            if row["request_hash"] != request_hash:
+                raise IdempotencyConflict("idempotency key already used for a different request")
+            return row["entry_id"], True
+        entry_id = _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, None)
+        conn.execute(
+            "INSERT INTO idempotency_keys (customer_id, key, request_hash, entry_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (customer_id, key, request_hash, entry_id, timestamp()),
+        )
+        return entry_id, False
+
+
+def claim_flag(conn: sqlite3.Connection, name: str) -> bool:
+    """Set a one-time flag; True only for the single caller that set it."""
+    with write_txn(conn):
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO app_flags (name, set_at) VALUES (?, ?)", (name, timestamp())
+        )
+        return cursor.rowcount == 1
 
 
 def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date) -> Statement:
@@ -283,8 +343,11 @@ def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date)
     if start > end:
         raise LedgerError("statement start is after its end")
     account = get_account(conn, account_id)
+    try:
+        upper = (end + timedelta(days=1)).isoformat()
+    except OverflowError:
+        raise LedgerError("statement end is out of range") from None
     lower = start.isoformat()
-    upper = (end + timedelta(days=1)).isoformat()
     (opening,) = conn.execute(
         "SELECT COALESCE(SUM(l.amount_minor), 0) FROM journal_lines l"
         " JOIN journal_entries e ON e.id = l.entry_id"
