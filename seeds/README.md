@@ -24,7 +24,7 @@ above was run 5 times. The worktree was then removed.
 
 | Seed | Failures | Notes |
 | --- | --- | --- |
-| `k1_race` | 5 of 5 | All 20 threads report success, so the test fails on `successes <= 1`. A further 20 runs also failed 20 of 20, so the seed needs **no** artificial delay. If a slower runner ever stops reproducing it, add `time.sleep(0.01)` between the read and the `BEGIN` in the seeded code only. |
+| `k1_race` | 5 of 5 | All 20 threads report success, so the test fails on `successes == 1` (exactly one withdrawal may succeed). A further 20 runs also failed 20 of 20, so the seed needs **no** artificial delay. If a slower runner ever stops reproducing it, add `time.sleep(0.01)` between the read and the `BEGIN` in the seeded code only. |
 | `k1_hidden_button` | 5 of 5 | The CSS check reports `('(max-width: 430px)', '.form-actions #send-button')`. |
 
 With either seed applied, every other test in the default run still passes.

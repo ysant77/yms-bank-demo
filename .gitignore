@@ -17,4 +17,3 @@ audit.json
 ci-report.json
 
 # Scenario run records (which twin and model made each change); read by the monitor
-.runs/
