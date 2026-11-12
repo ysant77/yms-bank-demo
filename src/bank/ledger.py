@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -363,42 +364,32 @@ def transfer_once(
         return result, False
 
 
-CLAIM_LEASE_SECONDS = 600
+def run_once(
+    conn: sqlite3.Connection, name: str, job: Callable[[sqlite3.Connection], None]
+) -> bool:
+    """Run ``job(conn)`` once per database, as one write transaction with its completion flag.
 
-
-def claim_flag(conn: sqlite3.Connection, name: str, now: datetime | None = None) -> bool:
-    """Claim a one-time job. True for exactly one caller at a time.
-
-    A claim that is not finished within ``CLAIM_LEASE_SECONDS`` (its worker died) can be taken
-    over; a finished job is never claimed again.
+    Either the job's writes and the ``done`` flag commit together, or neither does, so a job that
+    fails part-way leaves nothing behind and runs again on the next call. A second caller waits
+    for the write lock, then sees the flag and returns False. Returns True when the job ran.
     """
-    now = now or datetime.now(UTC)
-    stale = timestamp(now - timedelta(seconds=CLAIM_LEASE_SECONDS))
-    with write_txn(conn):
-        row = conn.execute("SELECT state, set_at FROM app_flags WHERE name = ?", (name,)).fetchone()
-        if row is None:
-            conn.execute(
-                "INSERT INTO app_flags (name, state, set_at) VALUES (?, 'claimed', ?)",
-                (name, timestamp(now)),
-            )
-            return True
-        if row["state"] == "claimed" and row["set_at"] < stale:
-            conn.execute("UPDATE app_flags SET set_at = ? WHERE name = ?", (timestamp(now), name))
-            return True
+
+    def done() -> bool:
+        row = conn.execute("SELECT state FROM app_flags WHERE name = ?", (name,)).fetchone()
+        return row is not None and row["state"] == "done"
+
+    if done():
         return False
-
-
-def finish_flag(conn: sqlite3.Connection, name: str) -> None:
     with write_txn(conn):
+        if done():
+            return False
+        job(conn)
         conn.execute(
-            "UPDATE app_flags SET state = 'done', set_at = ? WHERE name = ?", (timestamp(), name)
+            "INSERT INTO app_flags (name, state, set_at) VALUES (?, 'done', ?)"
+            " ON CONFLICT (name) DO UPDATE SET state = 'done', set_at = excluded.set_at",
+            (name, timestamp()),
         )
-
-
-def release_flag(conn: sqlite3.Connection, name: str) -> None:
-    """Give up an unfinished claim so the next start can try again."""
-    with write_txn(conn):
-        conn.execute("DELETE FROM app_flags WHERE name = ? AND state = 'claimed'", (name,))
+    return True
 
 
 def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date) -> Statement:

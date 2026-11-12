@@ -134,18 +134,33 @@ def test_statement_rejects_reversed_range(conn, two_accounts):
         ledger.statement(conn, a.id, date(2026, 5, 2), date(2026, 5, 1))
 
 
-def test_claim_flag_is_held_by_one_caller_until_finished(conn):
-    assert ledger.claim_flag(conn, "job") is True
-    assert ledger.claim_flag(conn, "job") is False
-    ledger.finish_flag(conn, "job")
-    assert ledger.claim_flag(conn, "job") is False
+def test_run_once_runs_a_job_once(conn):
+    runs = []
+    assert ledger.run_once(conn, "job", lambda c: runs.append(1)) is True
+    assert ledger.run_once(conn, "job", lambda c: runs.append(1)) is False
+    assert runs == [1]
 
 
-def test_a_released_or_stale_claim_can_be_taken_again(conn):
-    from datetime import UTC, datetime, timedelta
+def test_a_failed_job_leaves_nothing_and_runs_again(conn):
+    def half_done(c):
+        ledger.create_customer(c, "Written Before The Failure")
+        raise RuntimeError("disk full")
 
-    assert ledger.claim_flag(conn, "job") is True
-    ledger.release_flag(conn, "job")
-    assert ledger.claim_flag(conn, "job") is True
-    later = datetime.now(UTC) + timedelta(seconds=ledger.CLAIM_LEASE_SECONDS + 60)
-    assert ledger.claim_flag(conn, "job", now=later) is True
+    with pytest.raises(RuntimeError):
+        ledger.run_once(conn, "job", half_done)
+    assert ledger.list_customers(conn) == []
+    assert not conn.in_transaction
+    assert ledger.run_once(conn, "job", lambda c: ledger.create_customer(c, "Second Try")) is True
+    assert [c["name"] for c in ledger.list_customers(conn)] == ["Second Try"]
+
+
+def test_a_nested_write_failure_undoes_only_its_block(conn):
+    from bank.db import write_txn
+
+    with write_txn(conn):
+        ledger.create_customer(conn, "Kept")
+        with pytest.raises(ledger.LedgerError):
+            with write_txn(conn):
+                ledger.create_customer(conn, "Undone")
+                raise ledger.LedgerError("inner failure")
+    assert [c["name"] for c in ledger.list_customers(conn)] == ["Kept"]

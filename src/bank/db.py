@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -27,9 +28,28 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+_SAVEPOINTS = itertools.count(1)
+
+
 @contextmanager
 def write_txn(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    """Run the block in one write transaction that takes the write lock up front."""
+    """Run the block in one write transaction that takes the write lock up front.
+
+    Inside an open transaction (for example, seeding the demo data as one unit) the block runs
+    as a SAVEPOINT instead: a failure undoes only the block, and the outer transaction commits
+    or rolls back everything at once.
+    """
+    if conn.in_transaction:
+        name = f"sp_{next(_SAVEPOINTS)}"
+        conn.execute(f"SAVEPOINT {name}")
+        try:
+            yield conn
+        except BaseException:
+            conn.execute(f"ROLLBACK TO {name}")
+            conn.execute(f"RELEASE {name}")
+            raise
+        conn.execute(f"RELEASE {name}")
+        return
     conn.execute("BEGIN IMMEDIATE")
     try:
         yield conn

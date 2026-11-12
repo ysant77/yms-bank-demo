@@ -32,6 +32,14 @@ STATEMENT_DAYS = 30
 EARLIEST_DATE = date(1900, 1, 1)
 LATEST_DATE = date(9998, 12, 31)
 SEED_FLAG = "demo_seeded"
+SEED_WAIT_MS = 120_000  # how long a second worker waits for the first one's seed
+
+
+def seed_demo_data(conn: sqlite3.Connection) -> None:
+    if not ledger.list_customers(conn):
+        seed_data.build(conn)
+
+
 NO_DESTINATION = "destination account not found or cannot receive this transfer"
 
 
@@ -114,19 +122,13 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conn = ledger.open_db(path)
         try:
-            # Several workers may start at once: only the one that claims the job seeds. If
-            # seeding fails, the claim is released so the next start tries again.
-            if (
-                seed_if_empty
-                and not ledger.list_customers(conn)
-                and ledger.claim_flag(conn, SEED_FLAG)
-            ):
-                try:
-                    seed_data.build(conn)
-                except BaseException:
-                    ledger.release_flag(conn, SEED_FLAG)
-                    raise
-                ledger.finish_flag(conn, SEED_FLAG)
+            if seed_if_empty:
+                # One write transaction: the data and the "seeded" flag commit together, so a
+                # failed seed leaves nothing behind and the next start seeds again. A second
+                # worker waits for the lock, then sees the flag. A database that already has
+                # customers is marked as seeded and left alone.
+                conn.execute(f"PRAGMA busy_timeout = {SEED_WAIT_MS}")
+                ledger.run_once(conn, SEED_FLAG, seed_demo_data)
         finally:
             conn.close()
         yield
