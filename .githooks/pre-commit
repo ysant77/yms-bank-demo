@@ -1,0 +1,15 @@
+#!/bin/sh
+# Block commits that add secrets or private names.
+set -eu
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed; commit blocked" >&2
+  exit 1
+fi
+gitleaks git --pre-commit --staged --redact --no-banner
+# Optional local deny list (one term per line, never tracked).
+if [ -f .private-names ]; then
+  if git diff --cached -U0 | grep '^+' | grep -i -F -f .private-names >/dev/null; then
+    echo "pre-commit: staged change contains a name from .private-names" >&2
+    exit 1
+  fi
+fi
