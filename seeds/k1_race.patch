@@ -1,5 +1,5 @@
 diff --git a/src/bank/ledger.py b/src/bank/ledger.py
-index 0c5661f..f0ac5dd 100644
+index 7fc3afe..70522ff 100644
 --- a/src/bank/ledger.py
 +++ b/src/bank/ledger.py
 @@ -249,13 +249,24 @@ def withdraw(
@@ -30,4 +30,4 @@ index 0c5661f..f0ac5dd 100644
 +    return entry_id
  
  
- def transfer(
+ def _transfer_in_txn(
