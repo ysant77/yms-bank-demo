@@ -208,7 +208,11 @@ def test_statement_dates_out_of_range_are_400(bank, query):
 def test_the_same_key_is_scoped_to_each_customer(bank):
     owner = login(bank["app"], bank["owner"])
     other = login(bank["app"], bank["other"])
-    eur_number = ledger.get_account(ledger.open_db(bank["path"]), bank["eur"].id).number
+    conn = ledger.open_db(bank["path"])
+    try:
+        eur_number = ledger.get_account(conn, bank["eur"].id).number
+    finally:
+        conn.close()
     first = transfer(owner, bank["eur"].id, bank["foreign"].number, "1.00", key="shared")
     second = transfer(other, bank["foreign"].id, eur_number, "2.00", key="shared")
     assert first.status_code == 201 and second.status_code == 201
