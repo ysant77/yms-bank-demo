@@ -55,6 +55,12 @@ COMMIT_RE = re.compile(
     r"^(feat|fix|test|refactor|perf|docs|chore)(\([a-z0-9-]+\))?: [\w ,.:;()'\"/{}-]{3,90}$"
 )
 ATTEMPT_RE = re.compile(r"^v\d{1,2}$")
+# Commit and pull request text must not name an AI tool, vendor or model.
+TOOL_NAMES_RE = re.compile(
+    r"\b(claude|anthropic|openai|chatgpt|gpt|codex|copilot|gemini|gemma|llama|mistral|devstral|"
+    r"qwen|deepseek|muse|ollama|phi|llm|ai[- ]generated|generated with)\b",
+    re.IGNORECASE,
+)
 CLAIM_RE = re.compile(r"^[a-z][a-z ]{1,30}$")
 
 
@@ -90,11 +96,25 @@ def load(scenario: str) -> dict:
         raise ScenarioError(f"no scenario file scenarios/{scenario}.toml") from None
     except tomllib.TOMLDecodeError as exc:
         raise ScenarioError(f"scenarios/{scenario}.toml is not valid TOML: {exc}") from None
+    for field in ("base_branch", "twin_branch"):
+        if not isinstance(spec.get(field), str):
+            raise ScenarioError(f"scenarios/{scenario}.toml needs {field}")
+    attempts = spec.get("attempts")
+    if not isinstance(attempts, list) or not attempts:
+        raise ScenarioError(f"scenarios/{scenario}.toml needs at least one [[attempts]]")
+    for attempt in attempts:
+        if not isinstance(attempt, dict) or not isinstance(attempt.get("steps"), list):
+            raise ScenarioError(f"scenarios/{scenario}.toml: every attempt needs a steps list")
     for field in TEXT_FIELDS:
         check_text(spec, field)
+    texts = [spec["title"], spec["pr_title"], spec["twin"]]
+    texts += [str(a.get(f, "")) for a in attempts for f in ("commit", "twin")]
+    for text in texts:
+        if TOOL_NAMES_RE.search(text):
+            raise ScenarioError(f"scenario text may not name an AI tool or model: {text!r}")
     if spec["id"] != scenario:
         raise ScenarioError(f"scenarios/{scenario}.toml has id {spec['id']!r}")
-    for attempt in spec.get("attempts", []):
+    for attempt in attempts:
         if not ATTEMPT_RE.fullmatch(str(attempt.get("name", ""))):
             raise ScenarioError(f"attempt name must look like v1: {attempt.get('name')!r}")
         if not COMMIT_RE.fullmatch(str(attempt.get("commit", ""))):
@@ -126,8 +146,12 @@ def check_ref(ref: str, what: str) -> str:
     """A ref that names an existing commit, with no option or range syntax."""
     if not isinstance(ref, str) or not REF_RE.fullmatch(ref):
         raise ScenarioError(f"{what} is not a plain git ref: {ref!r}")
-    if not run("git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", capture=True):
-        raise ScenarioError(f"{what} {ref!r} is not a commit")
+    found = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if found.returncode != 0 or not found.stdout.strip():
+        raise ScenarioError(f"{what} {ref!r} does not name a commit in this repository")
     return ref
 
 
@@ -175,7 +199,7 @@ def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
     """Check every branch and path of an attempt before git is touched. Returns the branch."""
     check_branch(spec["base_branch"], "base")
     branch = check_branch(fill(spec["twin_branch"], values), "twin")
-    if values["key_lower"] not in branch:
+    if not re.search(rf"(^|[/-]){re.escape(values['key_lower'])}($|-)", branch):
         raise ScenarioError(f"twin branch {branch!r} must contain the issue key {values['KEY']}")
     for step in attempt["steps"]:
         if "add_test" in step:
@@ -215,8 +239,24 @@ def repo_slug() -> str:
 
 
 def patch_paths(patch: Path) -> list[str]:
-    out = run("git", "apply", "--numstat", str(patch), capture=True)
-    return [line.split("\t")[2] for line in out.splitlines() if line.count("\t") >= 2]
+    """Every path a patch touches, including the old name of a renamed file.
+
+    ``git apply --numstat`` lists only the new name of a rename, so the old names come from the
+    patch's own ``rename from`` lines. A path git had to quote is refused.
+    """
+    out = subprocess.run(
+        ["git", "apply", "--numstat", "-z", str(patch)],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if out.returncode != 0:
+        raise ScenarioError(f"seed patch {patch.name} does not apply: {out.stderr.strip()}")
+    paths = [rec.split("\t", 2)[2] for rec in out.stdout.split("\0") if rec.count("\t") >= 2]
+    for line in patch.read_text(encoding="utf-8").splitlines():
+        if line.startswith(("rename from ", "copy from ")):
+            paths.append(line.split(" ", 2)[2])
+    if any(not p or p.startswith('"') for p in paths):
+        raise ScenarioError(f"seed patch {patch.name} has a path git had to quote")
+    return sorted(set(paths))
 
 
 def commit_message(subject: str, twin: str, author: str) -> list[str]:
@@ -246,6 +286,9 @@ def commit(paths: list[str], message: list[str]) -> str:
     for part in message:
         args += ["-m", part]
     run(*args)
+    left = run("git", "status", "--porcelain", capture=True)
+    if left:
+        raise ScenarioError(f"changes left out of the commit: {left.splitlines()[:5]}")
     return run("git", "rev-parse", "HEAD", capture=True)
 
 
@@ -264,19 +307,48 @@ def write_run_record(record: dict) -> Path:
     return path
 
 
+def current_branch() -> str:
+    name = subprocess.run(
+        ["git", "symbolic-ref", "--short", "-q", "HEAD"], cwd=ROOT, capture_output=True, text=True
+    ).stdout.strip()
+    return name or run("git", "rev-parse", "HEAD", capture=True)
+
+
+def rollback(start: str, branch: str, created: bool, before: str, touched: list[str]) -> None:
+    """Undo a failed step: only the script's own changes, then go back to where the run began.
+
+    The work tree was clean when the run began, so a hard reset to ``before`` (the branch tip
+    when the script switched to it) only drops what the script wrote.
+    """
+    git = ["git", "-C", str(ROOT)]
+    subprocess.run([*git, "reset", "-q", "--hard", before], check=False)
+    if touched:
+        subprocess.run([*git, "clean", "-fdq", "--", *touched], check=False)
+    subprocess.run([*git, "switch", "-q", start], check=False)
+    if created:
+        subprocess.run([*git, "branch", "-q", "-D", branch], check=False)
+
+
 def cmd_base(args: argparse.Namespace) -> None:
     spec = load(args.scenario)
     branch = check_branch(spec["base_branch"], "base")
     source = check_ref(args.source, "--from")
     patch = safe_path(f"seeds/{spec['seed']}.patch")
     ensure_clean()
+    start = current_branch()
     run("git", "switch", "-q", "--no-track", "-c", branch, source)
-    paths = patch_paths(patch)
-    run("git", "apply", str(patch))
-    commit(paths, [seed_subject(spec), "Seeded defect, scripted."])
+    before = run("git", "rev-parse", "HEAD", capture=True)
+    paths: list[str] = []
+    try:
+        paths = patch_paths(patch)
+        run("git", "apply", str(patch))
+        commit(paths, [seed_subject(spec), "Seeded defect, scripted."])
+    except ScenarioError:
+        rollback(start, branch, True, before, paths)
+        raise
     print(f"base branch {branch} from {source} with seed {spec['seed']}")
     if args.push:
-        run("git", "push", "-q", "-u", "origin", branch)
+        run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
 
 
 def apply_step(step: dict, values: dict[str, str], spec: dict, clean: str) -> list[str]:
@@ -324,7 +396,9 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         if "add_test" in step:
             step["_template"] = safe_path(step["add_test"]).read_text(encoding="utf-8")
     clean = clean_ref(spec)
-    if run("git", "branch", "--list", branch, capture=True):
+    start = current_branch()
+    created = not run("git", "branch", "--list", branch, capture=True)
+    if not created:
         ancestor = subprocess.run(
             ["git", "merge-base", "--is-ancestor", base, branch], cwd=ROOT, check=False
         )
@@ -333,10 +407,16 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         run("git", "switch", "-q", branch)
     else:
         run("git", "switch", "-q", "--no-track", "-c", branch, base)
+    before = run("git", "rev-parse", "HEAD", capture=True)
     touched: list[str] = []
-    for step in attempt["steps"]:
-        touched += apply_step(step, values, spec, clean)
-    sha = commit(touched, commit_message(fill(attempt["commit"], values), twin, author))
+    try:
+        for step in attempt["steps"]:
+            touched += step_paths(step, values)
+            touched += apply_step(step, values, spec, clean)
+        sha = commit(touched, commit_message(fill(attempt["commit"], values), twin, author))
+    except ScenarioError:
+        rollback(start, branch, created, before, sorted(set(touched)))
+        raise
     record = {
         "scenario": spec["id"],
         "attempt": args.attempt,
@@ -352,7 +432,7 @@ def cmd_attempt(args: argparse.Namespace) -> None:
     print(f"{branch}: attempt {args.attempt} committed; run record {write_run_record(record)}")
     print(f"post in Jira: claim: {attempt['claim']}")
     if args.push:
-        run("git", "push", "-q", "-u", "origin", branch)
+        run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
     if args.open_pr:
         run(
             "gh",

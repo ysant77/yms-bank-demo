@@ -237,3 +237,75 @@ def test_a_missing_scenario_or_a_git_failure_returns_2(demo_repo, capsys):
     assert scenario.main(["base", "S97"]) == 2
     assert scenario.main(["base", "S98", "--from", "no-such-ref"]) == 2
     assert "refused" in capsys.readouterr().err
+
+
+def test_a_renaming_seed_is_committed_completely(demo_repo):
+    """A rename in a seed patch stages both the deletion and the new file."""
+    git(demo_repo, "mv", "notes.txt", "renamed.txt")
+    patch = git(demo_repo, "diff", "--cached", "-M")
+    git(demo_repo, "reset", "-q", "--hard")
+    (demo_repo / "seeds" / "k9_demo.patch").write_text(patch)
+    git(demo_repo, "commit", "-q", "-am", "chore: renaming seed")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert git(demo_repo, "status", "--porcelain") == ""
+    files = git(demo_repo, "show", "--name-status", "--format=", "test/s98-seed-demo").split()
+    assert files[0].startswith("R") and files[1:] == ["notes.txt", "renamed.txt"]
+
+
+@pytest.mark.parametrize(
+    "old, new",
+    [
+        ('base_branch = "test/s98-seed-demo"\n', ""),
+        ('twin_branch = "fix/{key_lower}-demo"\n', ""),
+        ('steps = [ { restore = "notes.txt" } ]', "commit_x = 1"),
+        ('title = "Demo defect"', 'title = "Demo defect written with Claude"'),
+        ('pr_title = "{KEY}: fix the demo defect"', 'pr_title = "{KEY}: fix from GPT-4o"'),
+        (
+            'commit = "fix(demo): revert the demo defect"',
+            'commit = "fix(demo): revert via copilot"',
+        ),
+        ('twin = "Nora"', 'twin = "Gemini"'),
+    ],
+)
+def test_incomplete_specs_and_tool_names_are_refused(demo_repo, old, new):
+    (demo_repo / "scenarios" / "S98.toml").write_text(SPEC.replace(old, new))
+    with pytest.raises(scenario.ScenarioError):
+        scenario.load("S98")
+
+
+def test_the_key_must_match_on_a_token_boundary():
+    spec = {"base_branch": "test/s99-seed", "twin_branch": "fix/bank-31-x"}
+    with pytest.raises(scenario.ScenarioError):
+        scenario.validate_attempt(spec, {"steps": []}, scenario.tokens("BANK-3"))
+    spec["twin_branch"] = "fix/bank-3-x"
+    assert scenario.validate_attempt(spec, {"steps": []}, scenario.tokens("BANK-3"))
+
+
+def test_a_bad_from_says_why(demo_repo, capsys):
+    assert scenario.main(["base", "S98", "--from", "no-such-ref"]) == 2
+    assert "'no-such-ref' does not name a commit" in capsys.readouterr().err
+
+
+def test_a_failed_step_restores_the_starting_branch(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    git(demo_repo, "switch", "-q", "main")
+    spec = (demo_repo / "scenarios" / "S98.toml").read_text()
+    (demo_repo / "scenarios" / "S98.toml").write_text(
+        spec.replace('old = "broken"', 'old = "absent"')
+    )
+    git(demo_repo, "commit", "-q", "-am", "chore: break the step")
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert git(demo_repo, "status", "--porcelain") == ""
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+
+
+def test_push_uses_an_explicit_refspec(demo_repo, tmp_path):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(demo_repo, "remote", "add", "origin", str(remote))
+    # A tag with the branch's name must not capture the push.
+    git(demo_repo, "tag", "test/s98-seed-demo")
+    assert scenario.main(["base", "S98", "--from", "main", "--push"]) == 0
+    heads = git(remote, "for-each-ref", "--format=%(refname)", "refs/heads")
+    assert "refs/heads/test/s98-seed-demo" in heads.split()
