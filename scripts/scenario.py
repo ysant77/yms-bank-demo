@@ -115,14 +115,15 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         # The clean code is the base branch's parent: the commit before the seed.
         apply_step(step, values, spec, spec.get("clean_ref", f"{spec['base_branch']}~1"))
     label = spec.get("author", "scripted")
-    commit(fill(attempt["commit"], values), f"{spec['twin']}, {label}")
+    twin = attempt.get("twin", spec["twin"])  # an attempt may name its own twin
+    commit(fill(attempt["commit"], values), f"{twin}, {label}")
     print(f"{branch}: attempt {args.attempt} committed; post in Jira: claim: {attempt['claim']}")
     if args.push:
         run("git", "push", "-q", "-u", "origin", branch)
     if args.open_pr:
         title = fill(spec["pr_title"], values)
         body = (
-            f"Twin change: {label} ({spec['twin']}). Scenario {spec['id']}: {spec['title']}.\n\n"
+            f"Twin change: {label} ({twin}). Scenario {spec['id']}: {spec['title']}.\n\n"
             f"Jira: {args.key}. Base branch `{spec['base_branch']}` holds the seeded defect.\n"
         )
         run(

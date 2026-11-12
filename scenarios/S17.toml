@@ -1,0 +1,27 @@
+id = "S17"
+title = "Failed evaluation gate"
+seed = "k7_weak_model"
+base_branch = "test/s17-seed-weak-model"
+twin_branch = "feat/{key_lower}-fraud-model-v3"
+pr_title = "{KEY}: ship fraud model v3"
+twin = "Omar"
+author = "scripted"
+
+[ticket]
+type = "Story"
+points = 3
+summary = "Ship fraud model v3"
+acceptance_criteria = """
+AC1 | Holdout AUC on days 61-90 is at least 0.88 | metric_at_least(auc, 0.88)
+AC2 | False positive rate at the decision threshold is at most 1% | metric_at_most(fpr_at_threshold, 0.01)
+"""
+
+# Omar claims v3 is ready. Its feature set drops the amount, so the holdout AUC is about 0.86
+# and the gate fails, while every test passes.
+[[attempts]]
+name = "v1"
+commit = "test(fraud): add evaluation gate tests for fraud model v3"
+claim = "ready"
+steps = [
+  { add_test = "scenarios/S17/test_fraud_gate.py.tmpl", dest = "tests/test_{token}_fraud_gate.py" },
+]
