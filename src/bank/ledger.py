@@ -329,4 +329,21 @@ def check_invariants(conn: sqlite3.Connection) -> list[str]:
         "SELECT number, balance_minor FROM accounts WHERE kind = 'customer' AND balance_minor < 0"
     ):
         problems.append(f"{row[0]} is negative: {row[1]}")
+    # A statement shows lines in posting-time order, so the running balance must never dip.
+    for row in conn.execute(
+        "SELECT number, MIN(running), posted_at FROM ("
+        " SELECT a.number, e.posted_at,"
+        "  SUM(l.amount_minor) OVER (PARTITION BY l.account_id ORDER BY e.posted_at, e.id"
+        "  ROWS UNBOUNDED PRECEDING) AS running"
+        " FROM journal_lines l JOIN journal_entries e ON e.id = l.entry_id"
+        " JOIN accounts a ON a.id = l.account_id WHERE a.kind = 'customer')"
+        " WHERE running < 0 GROUP BY number"
+    ):
+        problems.append(f"{row[0]} has a negative running balance {row[1]} at {row[2]}")
+    for row in conn.execute(
+        "SELECT a.number, e.posted_at FROM journal_lines l"
+        " JOIN journal_entries e ON e.id = l.entry_id JOIN accounts a ON a.id = l.account_id"
+        " WHERE a.kind = 'customer' AND e.posted_at < a.created_at GROUP BY a.number"
+    ):
+        problems.append(f"{row[0]} has a posting at {row[1]}, before it was opened")
     return problems
