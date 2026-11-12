@@ -178,3 +178,25 @@ def test_audit_vulnerabilities_counts_pip_audit_json(tmp_path):
     assert audit_vulnerabilities(str(report)) == 2
     assert audit_vulnerabilities(str(tmp_path / "missing.json")) is None
     assert audit_vulnerabilities(None) is None
+
+
+def test_data_hashes_block_is_optional(project):
+    report = run(project, "-k", "test_ok")
+    assert "data_hashes" not in report
+
+    train, live = hashlib.sha256(b"train").hexdigest(), hashlib.sha256(b"live").hexdigest()
+    project.makepyfile(
+        test_model=f"""
+def test_model(record_data_hashes):
+    record_data_hashes("{train}", "{live}")
+"""
+    )
+    report = run(project, "test_model.py")
+    assert report["data_hashes"] == {"train": train, "live": live}
+    assert report["schema"] == "aat-ci-report/1"
+
+
+@pytest.mark.parametrize("value", ["", "ABC", "a" * 63, None])
+def test_record_data_hashes_rejects_non_digests(value):
+    with pytest.raises(ValueError):
+        Collector().record_data_hashes(value, "a" * 64)

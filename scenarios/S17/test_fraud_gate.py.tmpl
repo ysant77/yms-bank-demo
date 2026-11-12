@@ -1,0 +1,10 @@
+"""Acceptance tests for {KEY}: evaluation gate metrics for fraud model v3."""
+
+from fraud.model import FEATURE_SET
+
+
+def test_{TOKEN}_model_v3_is_evaluated_on_holdout(fraud_run, record_metric):
+    assert FEATURE_SET == "v3" and fraud_run.feature_set == "v3"
+    assert fraud_run.test_rows["day"].min() == 61
+    for name in ("pr_auc", "fpr_at_threshold", "recall_at_threshold", "auc"):
+        record_metric(name, fraud_run.metrics[name])
