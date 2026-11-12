@@ -1,4 +1,4 @@
-"""HTTP API for YMS Bank.
+"""HTTP API and web front end for YMS Bank.
 
 The session is a demo stand-in: ``POST /api/session`` stores the chosen customer id in the
 ``yms_customer`` cookie. There are no passwords. Every account route resolves the account
@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from bank import ledger, seed_data
@@ -26,6 +27,7 @@ from bank.db import connect
 from bank.money import Money, exponent, from_minor
 
 COOKIE = "yms_customer"
+WEB_DIR = Path(__file__).resolve().parent / "web"
 STATEMENT_DAYS = 30
 
 
@@ -205,6 +207,7 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
             "from_account": account_json(ledger.get_account(conn, source.id)),
         }
 
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app
 
 
