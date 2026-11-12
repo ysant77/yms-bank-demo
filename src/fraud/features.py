@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fraud.data import CATEGORIES, DAY_S, Table, chargeback_window
+from fraud.data import CATEGORIES, DAY_S, Table, chargeback_window, take
 
 REQUEST = "request"
 HISTORY = "history"
@@ -121,3 +121,37 @@ def past_only_violations(matrix: FeatureMatrix) -> dict[str, int]:
         if bad.any():
             found[name] = int(bad.sum())
     return found
+
+
+def later_data_changes(
+    txns: Table,
+    chargebacks: Table,
+    matrix: FeatureMatrix,
+    index: np.ndarray,
+    feature_set: str,
+    rows: int = 150,
+    seed: int = 0,
+) -> list[str]:
+    """Rows whose features change when the chargebacks filed at or after them are removed.
+
+    A behavioural past-only check that does not trust the recorded source times. ``matrix`` row
+    ``k`` must belong to transaction ``index[k]``. It samples up to ``rows`` rows whose account
+    has a later chargeback (the rows where future data exists to leak), rebuilds each one alone
+    from the chargebacks filed strictly before it, and compares. An empty result means no change.
+    """
+    accounts = txns["account_id"][index]
+    latest = np.full(int(max(txns["account_id"].max(), chargebacks["account_id"].max())) + 1, -1)
+    np.maximum.at(latest, chargebacks["account_id"], chargebacks["ts"])
+    exposed = np.flatnonzero(latest[accounts] > txns["ts"][index])
+    rng = np.random.default_rng(seed)
+    picks = rng.choice(exposed, min(rows, len(exposed)), replace=False)
+    changes = []
+    for k in np.sort(picks):
+        i = index[k]
+        past = take(chargebacks, chargebacks["ts"] < txns["ts"][i])
+        alone = build(take(txns, np.array([i])), past, feature_set)
+        for j, name in enumerate(matrix.names):
+            if alone.X[0, j] != matrix.X[k, j]:
+                txn = int(txns["txn_id"][i])
+                changes.append(f"txn {txn} {name}: {matrix.X[k, j]} with, {alone.X[0, j]} without")
+    return changes

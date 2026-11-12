@@ -100,6 +100,8 @@ def chargeback_window(
     lo = np.searchsorted(keys, base + start, side="left")
     hi = np.searchsorted(keys, base + end, side="left")
     counts = hi - lo
+    if keys.size == 0:  # no chargebacks at all
+        return counts.astype(np.int64), np.full(len(ts), -1, dtype=np.int64)
     latest = np.where(counts > 0, keys[np.maximum(hi - 1, 0)] - base, -1)
     return counts.astype(np.int64), latest.astype(np.int64)
 

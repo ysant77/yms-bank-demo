@@ -14,11 +14,14 @@ summary = "Ship fraud model v3"
 acceptance_criteria = """
 AC1 | Holdout PR-AUC on days 61-90 is at least 0.25 | metric_at_least(pr_auc, 0.25)
 AC2 | Holdout false positive rate at the decision threshold is at most 1.5% | metric_at_most(fpr_at_threshold, 0.015)
+AC3 | Holdout recall at the decision threshold is at least 0.45 | metric_at_least(recall_at_threshold, 0.45)
+AC4 | Holdout AUC is at most 0.95; a higher value points to a leak | metric_at_most(auc, 0.95)
 """
 
 # Omar claims v3 is ready. Its feature set drops the amount, so the holdout PR-AUC falls from
 # about 0.39 to about 0.08 and the gate fails, while every test passes. The threshold targets a
-# 1% false positive rate on validation; AC2 allows for the holdout to differ a little.
+# 1% false positive rate on validation; AC2 allows for the holdout to differ a little. AC3 stops
+# a model that meets AC2 only by flagging less (a lower target rate), and AC4 stops a leak.
 [[attempts]]
 name = "v1"
 commit = "test(fraud): add evaluation gate tests for fraud model v3"

@@ -1,8 +1,14 @@
+import importlib.util
+import os
 from datetime import UTC, datetime
 
 import pytest
 
 from bank import ledger
+
+# Locally the fraud tests skip without the optional extra; in CI a skip would hide them.
+if os.environ.get("CI") and importlib.util.find_spec("sklearn") is None:
+    raise RuntimeError("CI must install the fraud extra (uv sync --extra fraud)")
 
 
 @pytest.fixture

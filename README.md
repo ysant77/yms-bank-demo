@@ -117,9 +117,13 @@ uv run python -m fraud.model   # train once and print the holdout metrics
 The tests train once per session and record `auc`, `pr_auc`, `recall_at_threshold`,
 `fpr_at_threshold`, `fpr_gap_max_min`, `fpr_ratio_max_min` (only when finite) and `psi_amount`
 (all on the holdout) with `record_metric`, and the
-training (days 1 to 60) and live (days 61 to 90) data hashes with `record_data_hashes`, which
-adds a `data_hashes` block to the CI report. On the clean code the holdout AUC is about 0.89
-and the PR-AUC about 0.39.
+development (days 1 to 60: fit on 1 to 45, threshold on 46 to 60) and live (days 61 to 90) data
+hashes with `record_data_hashes`, which adds a `data_hashes` block to the CI report. On the
+clean code the holdout AUC is about 0.89 and the PR-AUC about 0.39.
+
+Labels are taken as final: a fraud near the end of a window counts as fraud even though its
+chargeback would arrive up to 31 days later. A real pipeline would leave a label-maturity gap of
+that length between the training data and the evaluation; this demo does not.
 
 ## Seeds
 

@@ -22,7 +22,7 @@ def pr_auc(y_true: np.ndarray, scores: np.ndarray) -> float:
 
 
 def threshold_at_fpr(y_true: np.ndarray, scores: np.ndarray, fpr: float = 0.01) -> float:
-    """The lowest threshold whose false positive rate is at most ``fpr``.
+    """The lowest ROC threshold kept by ``roc_curve`` with a false positive rate of at most ``fpr``.
 
     Only the thresholds that ``roc_curve`` keeps are candidates. Scores at or above the threshold
     are flagged. The recall at this threshold is ``recall_at_fpr(y_true, scores, fpr)``, the

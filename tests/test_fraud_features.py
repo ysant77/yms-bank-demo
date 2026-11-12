@@ -2,10 +2,20 @@ import pytest
 
 pytest.importorskip("sklearn", reason="needs the fraud extra: uv sync --extra fraud")
 
+import dataclasses
+
 import numpy as np
 
-from fraud.data import DAY_S, chargeback_window
-from fraud.features import HISTORY, NO_SOURCE, REQUEST, FeatureMatrix, past_only_violations
+from fraud.data import DAY_S, chargeback_window, take
+from fraud.features import (
+    HISTORY,
+    NO_SOURCE,
+    REQUEST,
+    FeatureMatrix,
+    build,
+    later_data_changes,
+    past_only_violations,
+)
 
 
 def test_features_use_past_only(fraud_run):
@@ -62,3 +72,37 @@ def test_chargeback_feature_matches_the_data_column(fraud_run):
         j = matrix.names.index("chargebacks_30d_before")
         column = fraud_run.test_rows["chargebacks_30d_before"]
         assert np.array_equal(matrix.X[:, j], column)
+
+
+def test_features_do_not_change_when_later_chargebacks_are_removed(fraud_run):
+    txns, chargebacks = fraud_run.data.transactions, fraud_run.data.chargebacks
+    parts = (
+        (fraud_run.train, fraud_run.train_index),
+        (fraud_run.valid, fraud_run.valid_index),
+        (fraud_run.test, fraud_run.test_index),
+    )
+    for matrix, index in parts:
+        changes = later_data_changes(txns, chargebacks, matrix, index, fraud_run.feature_set)
+        assert changes == [], changes[:5]
+
+
+def test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time(fraud_run):
+    """A 10-day look-ahead that reports a source time just before the transaction still fails."""
+    txns, chargebacks = fraud_run.data.transactions, fraud_run.data.chargebacks
+    index = fraud_run.test_index
+    rows = take(txns, index)
+    ahead = take(chargebacks, np.ones(len(chargebacks["ts"]), dtype=bool))
+    ahead["ts"] = ahead["ts"] - 10 * DAY_S  # every chargeback appears 10 days early
+    leaky = build(rows, ahead, fraud_run.feature_set)
+    j = leaky.names.index("chargebacks_30d_before")
+    source = leaky.source_ts.copy()
+    source[:, j] = np.where(source[:, j] != NO_SOURCE, leaky.ts - 1, NO_SOURCE)
+    disguised = dataclasses.replace(leaky, source_ts=source)
+    assert past_only_violations(disguised) == {}
+    assert later_data_changes(txns, chargebacks, disguised, index, fraud_run.feature_set) != []
+
+
+def test_chargeback_window_without_any_chargebacks():
+    empty = np.array([], dtype=np.int64)
+    counts, latest = chargeback_window(np.array([4]), np.array([10 * DAY_S]), empty, empty)
+    assert counts.tolist() == [0] and latest.tolist() == [-1]
