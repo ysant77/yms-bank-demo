@@ -1,7 +1,9 @@
 """Safety rules of scripts/scenario.py: nothing unsafe may reach git."""
 
 import importlib.util
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "scenario.py"
 spec = importlib.util.spec_from_file_location("scenario_script", SCRIPT)
 scenario = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = scenario  # dataclasses look their module up here
 spec.loader.exec_module(scenario)
 
 
@@ -447,14 +450,14 @@ def test_a_failed_branch_undo_says_so(demo_repo, monkeypatch, capsys):
     real = scenario.git
 
     def failing_delete(*args):
-        if args[:1] == ("branch",):
+        if args[:2] == ("update-ref", "-d"):
             return subprocess.CompletedProcess(args, 1, "", "fatal: simulated failure")
         return real(*args)
 
     monkeypatch.setattr(scenario, "git", failing_delete)
     assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
     err = capsys.readouterr().err
-    assert "rollback incomplete: could not delete the branch fix/bank-9-demo" in err
+    assert "rollback incomplete: could not delete fix/bank-9-demo, which this run created" in err
 
 
 def test_reads_use_the_branch_not_a_tag_with_the_same_name(demo_repo):
@@ -592,3 +595,146 @@ def test_an_interrupt_right_after_the_switch_leaves_nothing(demo_repo, monkeypat
         scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
     assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
     assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def outside_commit(repo, branch, text):
+    """A commit made on ``branch`` by someone else (one file added), without any worktree."""
+    tip = git(repo, "rev-parse", f"refs/heads/{branch}").strip()
+    blob = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text, text=True,
+        capture_output=True, check=True,
+    ).stdout.strip()  # fmt: skip
+    index = {**os.environ, "GIT_INDEX_FILE": str(repo / ".git" / "outside-index")}
+    entry = f"100644,{blob},outside.txt"
+    for args in (["read-tree", tip], ["update-index", "--add", "--cacheinfo", entry]):
+        subprocess.run(["git", *args], cwd=repo, env=index, check=True, capture_output=True)
+    tree = subprocess.run(
+        ["git", "write-tree"], cwd=repo, env=index, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    (repo / ".git" / "outside-index").unlink()
+    new = git(repo, "commit-tree", tree, "-p", tip, "-m", "other run").strip()
+    git(repo, "update-ref", f"refs/heads/{branch}", new, tip)
+    return new
+
+
+def test_a_failed_run_never_rewinds_a_commit_it_did_not_make(demo_repo, monkeypatch):
+    """Another run finishes on the twin between this run's start and its switch; this run then
+    fails. The other run's commit must stay on the branch."""
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    real = scenario.switch_into
+    other = {}
+
+    def late_switch(state, start_new):
+        other["sha"] = outside_commit(demo_repo, state.branch, "other run's change\n")
+        real(state, start_new)
+
+    monkeypatch.setattr(scenario, "switch_into", late_switch)
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 2  # nothing to commit
+    assert git(demo_repo, "rev-parse", "fix/bank-9-demo").strip() == other["sha"]
+
+
+def test_a_branch_created_by_someone_else_is_never_deleted(demo_repo, monkeypatch):
+    real = scenario.switch_into
+    other = {}
+
+    def raced(state, start_new):
+        git(demo_repo, "branch", state.branch, "main")
+        other["sha"] = git(demo_repo, "rev-parse", state.branch).strip()
+        real(state, start_new)
+
+    monkeypatch.setattr(scenario, "switch_into", raced)
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2  # switch -c: already exists
+    assert git(demo_repo, "rev-parse", "test/s98-seed-demo").strip() == other["sha"]
+
+
+def test_a_twin_checked_out_by_the_user_is_never_rewound(demo_repo):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    git(demo_repo, "switch", "-q", "fix/bank-9-demo")
+    (demo_repo / "mine.txt").write_text("user work\n")
+    git(demo_repo, "add", "mine.txt")
+    git(demo_repo, "commit", "-q", "-m", "chore: user work")
+    tip = git(demo_repo, "rev-parse", "HEAD").strip()
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2  # checked out here
+    assert git(demo_repo, "rev-parse", "fix/bank-9-demo").strip() == tip
+    assert git(demo_repo, "symbolic-ref", "--short", "HEAD").strip() == "fix/bank-9-demo"
+
+
+def test_a_live_lock_makes_a_second_run_refuse(demo_repo, capsys):
+    folder = demo_repo / ".git" / "scenario-locks"
+    folder.mkdir()
+    (folder / "test__s98-seed-demo.lock").write_text(f"{os.getpid()} now\n")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert "another run holds test/s98-seed-demo" in capsys.readouterr().err
+    (folder / "test__s98-seed-demo.lock").write_text("999999 gone\n")  # a dead holder
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert list(folder.iterdir()) == []
+
+
+def test_git_location_variables_from_the_caller_are_ignored(demo_repo, monkeypatch):
+    index = demo_repo / ".git" / "index"
+    before = index.read_bytes()
+    monkeypatch.setenv("GIT_INDEX_FILE", str(index))
+    monkeypatch.setenv("GIT_DIR", str(demo_repo / ".git"))
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    assert index.read_bytes() == before
+
+
+def test_sigterm_rolls_back_like_ctrl_c(demo_repo, monkeypatch):
+    import signal
+
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    real = scenario.apply_step
+
+    def terminated(*args):
+        result = real(*args)
+        os.kill(os.getpid(), signal.SIGTERM)
+        return result
+
+    monkeypatch.setattr(scenario, "apply_step", terminated)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_leftover_temporary_worktree_names_the_command(demo_repo, tmp_path, capsys):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    left = tmp_path / "scenario-run-old" / "tree"
+    git(demo_repo, "worktree", "add", "-q", str(left), "fix/bank-9-demo")
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
+    assert f"git worktree remove --force {left}" in capsys.readouterr().err
+
+
+def test_an_interrupt_after_a_finished_run_keeps_its_commit(demo_repo, monkeypatch):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+
+    def interrupted_cleanup(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(scenario.shutil, "rmtree", interrupted_cleanup)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
+    monkeypatch.undo()
+    assert "half fixed" in git(demo_repo, "show", "fix/bank-9-demo:notes.txt")
+
+
+def test_add_test_never_overwrites_a_tracked_file_with_other_content(demo_repo, capsys):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    # Same content again is allowed (a later attempt re-adding its test).
+    spec = (demo_repo / "scenarios" / "S98.toml").read_text()
+    readd = '{ add_test = "scenarios/S98/check.txt.tmpl", dest = "checks/{token}.txt" }'
+    v2 = 'steps = [ { restore = "notes.txt" } ]'
+    again = spec.replace(v2, f'steps = [ {{ restore = "notes.txt" }}, {readd} ]')
+    (demo_repo / "scenarios" / "S98.toml").write_text(again)
+    git(demo_repo, "commit", "-q", "-am", "chore: v2 re-adds the test")
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
+    # Other content is refused.
+    (demo_repo / "scenarios" / "S98" / "check.txt.tmpl").write_text("different {KEY}\n")
+    git(demo_repo, "commit", "-q", "-am", "chore: change the template")
+    assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 2
+    assert "exists with other content" in capsys.readouterr().err

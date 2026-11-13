@@ -29,14 +29,20 @@ The generator refuses, before touching git:
   not a guarantee: it cannot recognise every name, and ordinary words are allowed on purpose.
 
 Every run works in a temporary linked worktree (`git worktree add --detach`) outside the
-repository: the branch is created or checked out there, the seed or steps are applied, the paths
-the run wrote are committed and the branch is pushed from there. Your checkout (working tree,
-index, HEAD, ignored and untracked files) is never changed, so it does not need to be clean. A
-branch that is checked out in your checkout cannot be used for an attempt; switch away first.
+repository; your checkout (working tree, index, HEAD, ignored and untracked files) is never
+changed. Git's location variables (`GIT_DIR`, `GIT_INDEX_FILE` and similar) from the caller's
+environment are ignored. Only one run per branch at a time: a lock file under the git common
+directory (with the run's process id) makes a second run refuse; a lock whose process is gone is
+taken over. A leftover temporary worktree from an interrupted run is named with the exact
+`git worktree remove --force <path>` command.
 
-If anything fails or is interrupted (also Ctrl-C), the temporary worktree is removed, a branch
-that this run created is deleted, and an existing branch that the run moved is set back to its
-earlier tip (compare-and-swap with `git update-ref`). Nothing else is undone because nothing else
-was changed. If one of those steps fails, the script prints `rollback incomplete: ...`.
+A run is *finished* when its commit (and its push, if asked) succeeded; a finished run is never
+undone, even if it is interrupted while cleaning up. If an unfinished run fails or is interrupted
+(Ctrl-C, SIGTERM or SIGHUP), the temporary worktree is removed and the branch is rolled back only
+where this run recorded what it did, with compare-and-swap (`git update-ref`): a branch that this
+run's own `git switch -c` created is deleted only if it still points where this run left it; an
+existing branch is set back to the tip it had right after this run's switch only if it still
+points at this run's own commit. If the branch has moved in the meantime (another run or the user
+committed), it is left alone and the script prints `rollback incomplete: ...`.
 Every refusal, a missing scenario file or a failed git command exits with code 2 and a line that
 starts with `refused:`.
