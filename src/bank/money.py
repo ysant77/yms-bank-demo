@@ -49,7 +49,18 @@ class Money:
 
     @classmethod
     def of(cls, amount: Decimal | str | int, currency: str) -> Money:
-        return cls(to_minor(amount, currency), currency)
+        """Exact constructor: more decimals than the currency has is an error, not a rounding."""
+        if isinstance(amount, float):
+            raise TypeError("use Decimal or str for money, not float")
+        try:
+            value = Decimal(amount)
+        except ArithmeticError:
+            raise ValueError(f"{amount!r} is not a number") from None
+        if not value.is_finite():
+            raise ValueError(f"{amount!r} is not a finite amount")
+        if -value.as_tuple().exponent > exponent(currency):
+            raise ValueError(f"{amount} has more decimals than {currency} allows")
+        return cls(to_minor(value, currency), currency)
 
     def _same(self, other: Money) -> None:
         if other.currency != self.currency:

@@ -47,7 +47,8 @@ Open <http://127.0.0.1:8000>, choose a demo customer, and use the accounts, tran
 statement pages. `BANK_DB` selects another database file (default `demo.db`).
 
 There are no passwords. `POST /api/session` with `{"customer_id": N}` sets the `yms_customer`
-cookie. The API:
+cookie, which holds the plain customer id and is not signed. **Run the demo on localhost only;**
+the session model is for a demo, not for a server that others can reach. The API:
 
 | Route | Purpose |
 | --- | --- |
@@ -56,7 +57,7 @@ cookie. The API:
 | `GET /api/accounts` | The session customer's accounts. |
 | `GET /api/accounts/{id}` | One account. |
 | `GET /api/accounts/{id}/statement?from=YYYY-MM-DD&to=YYYY-MM-DD` | Lines with a running balance; both dates inclusive; default is the last 30 days. |
-| `POST /api/transfers` | `{"from_account_id", "to_account_number", "amount", "reference"}`; amount is a decimal string. |
+| `POST /api/transfers` | `{"from_account_id", "to_account_number", "amount", "reference"}`; amount is a decimal string. Requires an `Idempotency-Key` header: a retry with the same key returns the first transfer (200, `"replayed": true`); the same key with a different body is 422. Keys are per customer and expire after 24 hours; a failed attempt (for example insufficient funds) stores no key, so it can be retried. |
 
 Account routes answer 404 for any account the session customer does not own.
 
@@ -80,13 +81,24 @@ check that the Send button stays visible at 430 px and below.
 uv run pytest -m "bench or not bench" --ci-report=ci-report.json
 ```
 
-The report follows the `aat-ci-report/1` format: test ids with outcomes and durations, metrics
+The report follows the `aat-ci-report/1` format (`aat` stands for *agentic agile team*, the
+issue-tracker verifier that reads it): test ids with outcomes and durations, metrics
 recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), an
 optional `data_hashes` block from the `record_data_hashes(train, live)` fixture, locked
 dependency versions from `uv.lock`, a sha256 of every file under `.github/workflows/`, head
 and base commits from `CI_HEAD_SHA`/`CI_BASE_SHA` (or `git rev-parse` of `HEAD` and
-`CI_BASE_REF`, default `main`), and the SQL operations in each migration. CI runs ruff, the
-default tests, then this report run, and uploads `ci-report.json` as an artifact.
+`CI_BASE_REF`, default `main`), the SQL operations in each migration, and `audit_vulns` from the
+dependency audit.
+
+CI (`.github/workflows/ci.yml`, Linux only) has four jobs:
+- `test`: ruff lint and format check, the default tests, a dependency audit with `pip-audit`
+  (pinned in `uv.lock`), the report run, and the report uploaded as an artifact. The job fails
+  on any test failure or known vulnerability; the report is still produced.
+- `report`: on a pull request, posts the report as one comment that starts with
+  `<!-- aat-ci-report -->` and is edited in place on later pushes. It runs no repository code.
+- `publish-main-report`: on a push to `main`, writes the report to `main.json` on the
+  `ci-reports` branch.
+- `secrets`: a gitleaks scan of the full history.
 
 ## Fraud score kit
 
@@ -139,8 +151,8 @@ Enable the local hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook runs `gitleaks` on staged changes. Before any repository goes public, run
-`scripts/scan_history.sh` on the full history.
+The pre-commit hook runs `gitleaks` on staged changes. Run `scripts/scan_history.sh` on the
+full history before any history rewrite or new remote.
 
 ## Licence
 

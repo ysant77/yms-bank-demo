@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -29,6 +29,18 @@ from bank.money import Money, exponent, from_minor
 COOKIE = "yms_customer"
 WEB_DIR = Path(__file__).resolve().parent / "web"
 STATEMENT_DAYS = 30
+EARLIEST_DATE = date(1900, 1, 1)
+LATEST_DATE = date(9998, 12, 31)
+SEED_FLAG = "demo_seeded"
+SEED_WAIT_MS = 120_000  # how long a second worker waits for the first one's seed
+
+
+def seed_demo_data(conn: sqlite3.Connection) -> None:
+    if not ledger.list_customers(conn):
+        seed_data.build(conn)
+
+
+NO_DESTINATION = "destination account not found or cannot receive this transfer"
 
 
 class SessionIn(BaseModel):
@@ -110,8 +122,13 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conn = ledger.open_db(path)
         try:
-            if seed_if_empty and not ledger.list_customers(conn):
-                seed_data.build(conn)
+            if seed_if_empty:
+                # One write transaction: the data and the "seeded" flag commit together, so a
+                # failed seed leaves nothing behind and the next start seeds again. A second
+                # worker waits for the lock, then sees the flag. A database that already has
+                # customers is marked as seeded and left alone.
+                conn.execute(f"PRAGMA busy_timeout = {SEED_WAIT_MS}")
+                ledger.run_once(conn, SEED_FLAG, seed_demo_data)
         finally:
             conn.close()
         yield
@@ -156,6 +173,9 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
         start: Annotated[date | None, Query(alias="from")] = None,
         end: Annotated[date | None, Query(alias="to")] = None,
     ) -> dict[str, object]:
+        for value in (start, end):
+            if value is not None and not EARLIEST_DATE <= value <= LATEST_DATE:
+                raise HTTPException(400, f"dates must be between {EARLIEST_DATE} and {LATEST_DATE}")
         end = end or datetime.now(UTC).date()
         start = start or end - timedelta(days=STATEMENT_DAYS - 1)
         try:
@@ -184,27 +204,54 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
         }
 
     @app.post("/api/transfers", status_code=201)
-    def create_transfer(body: TransferIn, customer_id: CustomerId, conn: Conn) -> dict[str, object]:
+    def create_transfer(
+        body: TransferIn,
+        customer_id: CustomerId,
+        conn: Conn,
+        response: Response,
+        idempotency_key: Annotated[str | None, Header(max_length=100)] = None,
+    ) -> dict[str, object]:
+        if not idempotency_key or not idempotency_key.strip():
+            raise HTTPException(400, "Idempotency-Key header is required")
         source = owned_account(body.from_account_id, customer_id, conn)
         try:
             target = ledger.get_account_by_number(conn, body.to_account_number.strip().upper())
         except ledger.NotFound:
             target = None
-        if target is None or target.kind != "customer":
-            raise HTTPException(404, "destination account not found")
+        # One message for "no such account" and "wrong currency", so the reply does not reveal
+        # another customer's account details.
+        if target is None or target.kind != "customer" or target.currency != source.currency:
+            raise HTTPException(404, NO_DESTINATION)
         amount = parse_amount(body.amount, source.currency)
         try:
-            entry_id = ledger.transfer(conn, source.id, target.id, amount, body.reference)
+            result, replayed = ledger.transfer_once(
+                conn,
+                customer_id,
+                idempotency_key.strip(),
+                source.id,
+                target.id,
+                amount,
+                body.reference,
+            )
+        except ledger.IdempotencyConflict as exc:
+            raise HTTPException(422, str(exc)) from None
         except ledger.InsufficientFunds as exc:
             raise HTTPException(409, str(exc)) from None
         except ledger.LedgerError as exc:
             raise HTTPException(400, str(exc)) from None
+        if replayed:
+            response.status_code = 200
+        # The account as it was right after this transfer, also on a replay.
+        from_account = account_json(source) | money_fields(
+            "balance", int(result["from_balance_minor"]), source.currency
+        )
         return {
-            "entry_id": entry_id,
-            "to_account_number": target.number,
-            **money_fields("amount", amount.minor, amount.currency),
-            "currency": amount.currency,
-            "from_account": account_json(ledger.get_account(conn, source.id)),
+            "entry_id": result["entry_id"],
+            "replayed": replayed,
+            "to_account_number": result["to_account_number"],
+            **money_fields("amount", int(result["amount_minor"]), str(result["currency"])),
+            "currency": result["currency"],
+            "from_account": from_account,
         }
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

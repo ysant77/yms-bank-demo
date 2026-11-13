@@ -1,4 +1,5 @@
 import re
+import uuid
 
 import pytest
 from fastapi.routing import APIRoute
@@ -110,9 +111,10 @@ def test_statement_rejects_bad_dates(bank):
     assert client.get(base + "?from=yesterday").status_code == 422
 
 
-def transfer(client, from_id, to_number, amount, **extra):
+def transfer(client, from_id, to_number, amount, key=None, **extra):
     body = {"from_account_id": from_id, "to_account_number": to_number, "amount": amount}
-    return client.post("/api/transfers", json=body | extra)
+    headers = {"Idempotency-Key": key or str(uuid.uuid4())}
+    return client.post("/api/transfers", json=body | extra, headers=headers)
 
 
 def test_transfer_success(bank):
@@ -142,7 +144,7 @@ def test_transfer_from_foreign_account_is_404(bank):
         ("0", "YMS-0000-0003", 400),
         ("1.00", "YMS-9999-9999", 404),
         ("1.00", "YMS-CLR-EUR", 404),
-        ("1.00", "YMS-0000-0002", 400),
+        ("1.00", "YMS-0000-0002", 404),
         ("1.00", "YMS-0000-0001", 400),
         ("-5", "YMS-0000-0003", 422),
         ("1e3", "YMS-0000-0003", 422),
@@ -152,3 +154,83 @@ def test_transfer_errors(bank, amount, to, status):
     client = login(bank["app"], bank["owner"])
     assert transfer(client, bank["eur"].id, to, amount).status_code == status
     assert client.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "100.00"
+
+
+def test_transfer_requires_an_idempotency_key(bank):
+    client = login(bank["app"], bank["owner"])
+    body = {"from_account_id": bank["eur"].id, "to_account_number": bank["foreign"].number,
+            "amount": "1.00"}  # fmt: skip
+    assert client.post("/api/transfers", json=body).status_code == 400
+    assert client.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "100.00"
+
+
+def test_retry_with_the_same_key_moves_money_once(bank):
+    client = login(bank["app"], bank["owner"])
+    first = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="retry-1")
+    again = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="retry-1")
+    assert first.status_code == 201 and again.status_code == 200
+    assert again.json()["replayed"] is True
+    assert again.json()["entry_id"] == first.json()["entry_id"]
+    assert client.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "90.00"
+
+
+def test_same_key_with_a_different_body_is_rejected(bank):
+    client = login(bank["app"], bank["owner"])
+    assert (
+        transfer(client, bank["eur"].id, bank["foreign"].number, "5.00", key="k").status_code == 201
+    )
+    clash = transfer(client, bank["eur"].id, bank["foreign"].number, "6.00", key="k")
+    assert clash.status_code == 422
+    assert client.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "95.00"
+
+
+def test_wrong_currency_destination_does_not_reveal_its_currency(bank):
+    client = login(bank["app"], bank["other"])
+    response = transfer(client, bank["foreign"].id, "YMS-0000-0002", "1.00")
+    assert response.status_code == 404
+    assert "JPY" not in response.text and "holds" not in response.text
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?to=9999-12-31",
+        "?to=9999-01-01",  # inside date arithmetic range: only the API bound rejects it
+        "?from=1899-12-31&to=2026-05-01",
+        "?from=0001-01-01&to=2026-05-01",
+    ],
+)
+def test_statement_dates_out_of_range_are_400(bank, query):
+    client = login(bank["app"], bank["owner"])
+    assert client.get(f"/api/accounts/{bank['eur'].id}/statement{query}").status_code == 400
+
+
+def test_the_same_key_is_scoped_to_each_customer(bank):
+    owner = login(bank["app"], bank["owner"])
+    other = login(bank["app"], bank["other"])
+    conn = ledger.open_db(bank["path"])
+    try:
+        eur_number = ledger.get_account(conn, bank["eur"].id).number
+    finally:
+        conn.close()
+    first = transfer(owner, bank["eur"].id, bank["foreign"].number, "1.00", key="shared")
+    second = transfer(other, bank["foreign"].id, eur_number, "2.00", key="shared")
+    assert first.status_code == 201 and second.status_code == 201
+    assert second.json()["replayed"] is False
+    assert owner.get(f"/api/accounts/{bank['eur'].id}").json()["balance"] == "101.00"
+
+
+def test_amount_spelling_does_not_change_the_request(bank):
+    client = login(bank["app"], bank["owner"])
+    first = transfer(client, bank["eur"].id, bank["foreign"].number, "10.0", key="spell")
+    again = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="spell")
+    assert first.status_code == 201 and again.status_code == 200
+
+
+def test_a_replay_returns_the_original_result(bank):
+    client = login(bank["app"], bank["owner"])
+    first = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="orig")
+    transfer(client, bank["eur"].id, bank["foreign"].number, "5.00", key="later")
+    again = transfer(client, bank["eur"].id, bank["foreign"].number, "10.00", key="orig")
+    assert again.json()["from_account"]["balance"] == first.json()["from_account"]["balance"]
+    assert again.json()["from_account"]["balance"] == "90.00"
