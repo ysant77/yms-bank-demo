@@ -17,6 +17,14 @@ step touches must stay inside the repository and outside `.git`, `.github/workfl
 `.githooks`. Only the paths a step touched are committed. Any refusal or git failure exits
 with code 2.
 
+Isolation: every run works in a temporary linked worktree outside the repository; your
+checkout is never changed. One run per branch (a lock under the git common dir). A finished run
+(commit, and push if asked) is never undone. An unfinished run that fails or is interrupted
+(Ctrl-C, SIGTERM, SIGHUP) removes its worktree and rolls the branch back only where it recorded
+what it did, with compare-and-swap; a branch that moved meanwhile is left alone, with a message.
+Signals are held while a switch or commit and its record are taken. Known limits: see
+scenarios/README.md.
+
 Usage:
   uv run python scripts/scenario.py base S01 [--from origin/main] [--push]
   uv run python scripts/scenario.py attempt S01 v1 --key BANK-3 [--push] [--open-pr]
@@ -27,14 +35,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# The temporary worktree of the current run; None outside a run (reads come from ROOT).
+TREE: Path | None = None
 
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]*-[1-9][0-9]*$")
 BRANCH_RE = re.compile(r"^(test|fix|feat)/[a-z0-9][a-z0-9._-]*$")
@@ -55,6 +72,21 @@ COMMIT_RE = re.compile(
     r"^(feat|fix|test|refactor|perf|docs|chore)(\([a-z0-9-]+\))?: [\w ,.:;()'\"/{}-]{3,90}$"
 )
 ATTEMPT_RE = re.compile(r"^v\d{1,2}$")
+# A guard, not a guarantee: attribution phrases and a short list of unambiguous AI product
+# names, checked in every scenario field and template that can reach a commit, branch or PR.
+TOOL_NAMES_RE = re.compile(
+    r"co-authored-by|generated (?:with|by) (?:an? )?(?:ai|claude|chatgpt|copilot|codex|gpt)"
+    r"|written (?:by|with) (?:an? )?ai\b"
+    r"|claude|chatgpt|openai|anthropic|copilot|\bgpt(?:[-_ ]?\d|\b)",
+    re.IGNORECASE,
+)
+# The allowed step kinds and the exact keys each one takes.
+STEP_KEYS = {
+    "revert_seed": {"revert_seed"},
+    "restore": {"restore"},
+    "replace": {"replace", "old", "new"},
+    "add_test": {"add_test", "dest"},
+}
 CLAIM_RE = re.compile(r"^[a-z][a-z ]{1,30}$")
 
 
@@ -62,9 +94,35 @@ class ScenarioError(Exception):
     """A scenario file, argument or git state that must not reach git."""
 
 
-def run(*args: str, capture: bool = False) -> str:
+# Variables that would point git at another repository, index or object store (for example
+# inside a hook). The script always works on ROOT and its own temporary worktree.
+GIT_LOCATION_VARS = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_CEILING_DIRECTORIES",
+)  # fmt: skip
+
+
+def env() -> dict[str, str]:
+    """Pathspec magic such as ":/" is never interpreted in a path the script passes to git, and
+    git's location variables from the caller's environment are dropped."""
+    clean = {k: v for k, v in os.environ.items() if k not in GIT_LOCATION_VARS}
+    return {**clean, "GIT_LITERAL_PATHSPECS": "1"}
+
+
+def here() -> Path:
+    return TREE or ROOT
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    """A git command that may fail; the caller checks the return code."""
+    return subprocess.run(["git", *args], cwd=here(), text=True, capture_output=True, env=env())
+
+
+def run(*args: str, capture: bool = False, cwd: Path | None = None) -> str:
     try:
-        result = subprocess.run(args, cwd=ROOT, check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            args, cwd=cwd or here(), check=True, text=True, capture_output=True, env=env()
+        )
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip().splitlines()[-1:] or [""]
         raise ScenarioError(f"{args[0]} {args[1]} failed: {detail[0]}") from None
@@ -90,11 +148,26 @@ def load(scenario: str) -> dict:
         raise ScenarioError(f"no scenario file scenarios/{scenario}.toml") from None
     except tomllib.TOMLDecodeError as exc:
         raise ScenarioError(f"scenarios/{scenario}.toml is not valid TOML: {exc}") from None
+    for field in ("base_branch", "twin_branch"):
+        if not isinstance(spec.get(field), str):
+            raise ScenarioError(f"scenarios/{scenario}.toml needs {field}")
+    attempts = spec.get("attempts")
+    if not isinstance(attempts, list) or not attempts:
+        raise ScenarioError(f"scenarios/{scenario}.toml needs at least one [[attempts]]")
+    for attempt in attempts:
+        if not isinstance(attempt, dict) or not isinstance(attempt.get("steps"), list):
+            raise ScenarioError(f"scenarios/{scenario}.toml: every attempt needs a steps list")
+        for step in attempt["steps"]:
+            check_step(step)
+            for field in ("restore", "replace", "add_test"):
+                if field in step:
+                    safe_path(step[field])
     for field in TEXT_FIELDS:
         check_text(spec, field)
+    check_no_tool_names(spec)
     if spec["id"] != scenario:
         raise ScenarioError(f"scenarios/{scenario}.toml has id {spec['id']!r}")
-    for attempt in spec.get("attempts", []):
+    for attempt in attempts:
         if not ATTEMPT_RE.fullmatch(str(attempt.get("name", ""))):
             raise ScenarioError(f"attempt name must look like v1: {attempt.get('name')!r}")
         if not COMMIT_RE.fullmatch(str(attempt.get("commit", ""))):
@@ -104,6 +177,40 @@ def load(scenario: str) -> dict:
         if "twin" in attempt:
             check_text({"twin": attempt["twin"]}, "twin")
     return spec
+
+
+def check_step(step: object) -> None:
+    """A step is one known kind with exactly its keys, all strings (revert_seed: true)."""
+    if not isinstance(step, dict):
+        raise ScenarioError(f"a step must be a table: {step!r}")
+    kinds = [kind for kind in STEP_KEYS if kind in step]
+    if len(kinds) != 1 or set(step) != STEP_KEYS[kinds[0]]:
+        raise ScenarioError(
+            f"a step must be exactly one of {sorted(STEP_KEYS)} with its keys: {step!r}"
+        )
+    for key, value in step.items():
+        ok = value is True if key == "revert_seed" else isinstance(value, str) and value != ""
+        if not ok:
+            raise ScenarioError(f"step field {key!r} has a bad value: {value!r}")
+
+
+def strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in strings(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in strings(v)]
+    return []
+
+
+def check_no_tool_names(*values: object) -> None:
+    for text in (s for value in values for s in strings(value)):
+        found = TOOL_NAMES_RE.search(text)
+        if found:
+            raise ScenarioError(
+                f"scenario text may not name an AI tool or attribution: {found[0]!r}"
+            )
 
 
 def check_key(key: str) -> str:
@@ -126,24 +233,33 @@ def check_ref(ref: str, what: str) -> str:
     """A ref that names an existing commit, with no option or range syntax."""
     if not isinstance(ref, str) or not REF_RE.fullmatch(ref):
         raise ScenarioError(f"{what} is not a plain git ref: {ref!r}")
-    if not run("git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", capture=True):
-        raise ScenarioError(f"{what} {ref!r} is not a commit")
+    found = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    if found.returncode != 0 or not found.stdout.strip():
+        raise ScenarioError(f"{what} {ref!r} does not name a commit in this repository")
     return ref
 
 
-def safe_path(relative: str) -> Path:
-    """A path inside the repository, outside .git, .github/workflows and .githooks."""
+def safe_path(relative: str, write: bool = False) -> Path:
+    """A normalised file path inside the current tree, outside .git, .github/workflows and
+    .githooks. A write target may not be a symbolic link."""
     if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
         raise ScenarioError(f"path must be relative to the repository: {relative!r}")
-    path = (ROOT / relative).resolve()
-    root = ROOT.resolve()
+    if relative.startswith(":") or relative.endswith("/") or os.path.normpath(relative) != relative:
+        raise ScenarioError(f"path must be a plain normalised file path: {relative!r}")
+    tree = here()
+    path = (tree / relative).resolve()
+    root = tree.resolve()
     if not path.is_relative_to(root):
         raise ScenarioError(f"path leaves the repository: {relative!r}")
+    if path == root or path.is_dir():
+        raise ScenarioError(f"path must name a file, not a folder: {relative!r}")
+    if write and (tree / relative).is_symlink():
+        raise ScenarioError(f"path is a symbolic link; not written: {relative!r}")
     # Case-folded, because macOS file systems treat .GIT and .git as the same folder.
     parts = tuple(p.casefold() for p in path.relative_to(root).parts)
     if any(parts[: len(denied)] == denied for denied in DENIED_DIRS):
         raise ScenarioError(f"path is in a protected folder: {relative!r}")
-    return path
+    return tree / relative
 
 
 def tokens(key: str) -> dict[str, str]:
@@ -175,7 +291,7 @@ def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
     """Check every branch and path of an attempt before git is touched. Returns the branch."""
     check_branch(spec["base_branch"], "base")
     branch = check_branch(fill(spec["twin_branch"], values), "twin")
-    if values["key_lower"] not in branch:
+    if not re.search(rf"(^|[/-]){re.escape(values['key_lower'])}($|-)", branch):
         raise ScenarioError(f"twin branch {branch!r} must contain the issue key {values['KEY']}")
     for step in attempt["steps"]:
         if "add_test" in step:
@@ -183,11 +299,6 @@ def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
         for path in step_paths(step, values):
             safe_path(path)
     return branch
-
-
-def ensure_clean() -> None:
-    if run("git", "status", "--porcelain", capture=True):
-        raise ScenarioError("working tree is not clean; commit or stash first")
 
 
 def seed_subject(spec: dict) -> str:
@@ -198,7 +309,7 @@ def clean_ref(spec: dict) -> str:
     """The commit just before the seed on the base branch: the code without the defect."""
     if "clean_ref" in spec:
         return check_ref(spec["clean_ref"], "clean_ref")
-    log = run("git", "log", "--format=%H%x09%s", spec["base_branch"], capture=True)
+    log = run("git", "log", "--format=%H%x09%s", f"refs/heads/{spec['base_branch']}", capture=True)
     for line in log.splitlines():
         sha, _, subject = line.partition("\t")
         if subject == seed_subject(spec):
@@ -215,8 +326,25 @@ def repo_slug() -> str:
 
 
 def patch_paths(patch: Path) -> list[str]:
-    out = run("git", "apply", "--numstat", str(patch), capture=True)
-    return [line.split("\t")[2] for line in out.splitlines() if line.count("\t") >= 2]
+    """Every path a patch touches, including the old name of a renamed file.
+
+    ``git apply --numstat`` lists only the new name of a rename, so the old names come from the
+    patch's own ``rename from`` lines. A path git had to quote is refused.
+    """
+    out = git("apply", "--numstat", "-z", str(patch))
+    if out.returncode != 0:
+        raise ScenarioError(f"seed patch {patch.name} does not apply: {out.stderr.strip()}")
+    paths = [rec.split("\t", 2)[2] for rec in out.stdout.split("\0") if rec.count("\t") >= 2]
+    try:
+        text = patch.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise ScenarioError(f"seed patch {patch.name} is not UTF-8 text") from None
+    for line in text.splitlines():
+        if line.startswith(("rename from ", "copy from ")):
+            paths.append(line.split(" ", 2)[2])
+    if any(not p or p.startswith('"') for p in paths):
+        raise ScenarioError(f"seed patch {patch.name} has a path git had to quote")
+    return sorted(set(paths))
 
 
 def commit_message(subject: str, twin: str, author: str) -> list[str]:
@@ -233,26 +361,59 @@ def pr_body(spec: dict, key: str, twin: str, author: str) -> str:
     )
 
 
-def commit(paths: list[str], message: list[str]) -> str:
-    """Format, stage and commit only the given paths."""
+STOP_SIGNALS = {signal.SIGINT, signal.SIGTERM, signal.SIGHUP}
+
+
+@contextmanager
+def signals_deferred() -> Iterator[None]:
+    """Hold Ctrl-C, SIGTERM and SIGHUP while a git step and the record of what it did are taken
+    together. A signal that arrives meanwhile is only noted, and raised as KeyboardInterrupt right
+    after, when the record exists. Done with Python handlers (they always run in the main
+    thread), not a thread signal mask, which other threads could bypass."""
+    pending: list[int] = []
+
+    def hold(signum: int, _frame: object) -> None:
+        pending.append(signum)
+
+    previous = {s: signal.signal(s, hold) for s in STOP_SIGNALS}
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+        if pending:
+            raise KeyboardInterrupt(f"signal {pending[0]}")
+
+
+def commit(paths: list[str], message: list[str], state: RunState | None = None) -> str:
+    """Format, stage and commit only the given paths; record the new commit in ``state``."""
     for path in paths:
         safe_path(path)
-    py = [p for p in paths if p.endswith(".py") and (ROOT / p).exists()]
+    py = [p for p in paths if p.endswith(".py") and (here() / p).exists()]
     if py:
-        run("uv", "run", "ruff", "format", "-q", "--", *py)
-        run("uv", "run", "ruff", "check", "-q", "--fix", "--", *py)
-    run("git", "add", "-A", "--", *sorted(set(paths)))
+        # ruff runs inside the temporary tree (its config, no cache), from the project's
+        # environment in the main checkout, which is not written to.
+        ruff = ["uv", "run", "--no-sync", "--project", str(ROOT), "ruff"]
+        run(*ruff, "format", "-q", "--no-cache", "--", *py)
+        run(*ruff, "check", "-q", "--fix", "--no-cache", "--", *py)
+    # Exactly the paths the run wrote, even where an ignore rule matches them.
+    run("git", "add", "-A", "-f", "--", *sorted(set(paths)))
     args = ["git", "commit", "-q"]
     for part in message:
         args += ["-m", part]
-    run(*args)
+    with signals_deferred():
+        run(*args)
+        if state is not None:
+            state.made = run("git", "rev-parse", "HEAD", capture=True)
+    left = run("git", "status", "--porcelain", capture=True)
+    if left:
+        raise ScenarioError(f"changes left out of the commit: {left.splitlines()[:5]}")
     return run("git", "rev-parse", "HEAD", capture=True)
 
 
 def runs_dir() -> Path:
     """Run records live in the git directory, outside the work tree, so they are never staged."""
-    common = Path(run("git", "rev-parse", "--git-common-dir", capture=True))
-    return (common if common.is_absolute() else ROOT / common) / "scenario-runs"
+    return common_dir() / "scenario-runs"
 
 
 def write_run_record(record: dict) -> Path:
@@ -264,48 +425,276 @@ def write_run_record(record: dict) -> Path:
     return path
 
 
+@dataclass
+class RunState:
+    """What this run did to its branch. Undo acts only on these recorded values."""
+
+    branch: str
+    created: bool = False  # this run's own `git switch -c` succeeded
+    switched_tip: str | None = None  # the branch tip right after this run's own switch
+    made: str | None = None  # the commit this run made
+    finished: bool = False  # commit (and push, if asked) done: never rolled back
+
+
+def undo(state: RunState) -> None:
+    """Roll back a failed run, only where this run recorded what it did, with compare-and-swap.
+
+    Nothing happens before this run's own switch succeeded or after the run finished. A branch
+    this run created is deleted only if it still points where this run left it; an existing
+    branch is set back only if it still points at this run's own commit. Otherwise it is left
+    alone and the script says so.
+    """
+    if state.finished or state.switched_tip is None:
+        return
+    ref = f"refs/heads/{state.branch}"
+    if state.created:
+        expected = state.made or state.switched_tip
+        result = git("update-ref", "-d", ref, expected)
+        what = f"delete {state.branch}, which this run created, at {expected[:12]}"
+    elif state.made is not None:
+        result = git("update-ref", ref, state.switched_tip, state.made)
+        what = f"set {state.branch} back from this run's commit {state.made[:12]}"
+    else:
+        return
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()[-1:] or [""]
+        print(
+            f"rollback incomplete: could not {what}; the branch was left as it is: {detail[0]}",
+            file=sys.stderr,
+        )
+
+
+def common_dir() -> Path:
+    common = Path(run("git", "rev-parse", "--git-common-dir", capture=True, cwd=ROOT))
+    return common if common.is_absolute() else ROOT / common
+
+
+@contextmanager
+def branch_lock(branch: str) -> Iterator[None]:
+    """One run per branch at a time: a lock file under the git common dir, with the run's pid.
+    A lock whose process is gone is taken over; a live one makes this run refuse."""
+    folder = common_dir() / "scenario-locks"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / (branch.replace("/", "__") + ".lock")
+    for _ in range(2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            break
+        except FileExistsError:
+            try:
+                pid = int(path.read_text(encoding="utf-8").split()[0])
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                path.unlink(missing_ok=True)  # the holder is gone
+                continue
+            except (ValueError, IndexError, PermissionError, OSError):
+                pass
+            raise ScenarioError(
+                f"another run holds {branch} ({path}); wait for it, or remove the file if no run "
+                "is active"
+            ) from None
+    else:
+        raise ScenarioError(f"could not take the lock for {branch}: {path}")
+    try:
+        os.write(fd, f"{os.getpid()} {datetime.now(UTC).isoformat(timespec='seconds')}\n".encode())
+        os.close(fd)
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def own_temp_tree(path: str) -> bool:
+    """A worktree this script made: <system temp dir>/scenario-run-*/tree."""
+    candidate = Path(path)
+    return (
+        candidate.name == "tree"
+        and candidate.parent.name.startswith("scenario-run-")
+        and candidate.parent.parent.resolve() == Path(tempfile.gettempdir()).resolve()
+    )
+
+
+def check_leftovers(branch: str) -> None:
+    """A leftover temporary worktree of this script (under a scenario-run-* temp folder): one
+    whose folder is gone is removed by its path; one that still exists and holds the branch is
+    named with the exact command. Other worktrees are never touched."""
+    listing = run("git", "worktree", "list", "--porcelain", capture=True, cwd=ROOT)
+    for block in listing.split("\n\n"):
+        lines = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
+        path = lines.get("worktree", "")
+        if not own_temp_tree(path):
+            continue
+        if not Path(path).exists():
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", path],
+                cwd=ROOT, capture_output=True, env=env(),
+            )  # fmt: skip
+            continue
+        if lines.get("branch") == f"refs/heads/{branch}":
+            raise ScenarioError(
+                f"a leftover temporary worktree holds {branch}; remove it with: "
+                f"git worktree remove --force {path}"
+            )
+
+
+@contextmanager
+def temp_tree(start: str) -> Iterator[Path]:
+    """A temporary linked worktree, detached at ``start``, removed again whatever happens."""
+    global TREE
+    holder = Path(tempfile.mkdtemp(prefix="scenario-run-"))
+    tree = holder / "tree"
+    try:
+        run("git", "worktree", "add", "-q", "--detach", str(tree), start, cwd=ROOT)
+        TREE = tree
+        yield tree
+    finally:
+        TREE = None
+        removed = subprocess.run(
+            ["git", "worktree", "remove", "--force", str(tree)],
+            cwd=ROOT, text=True, capture_output=True, env=env(),
+        )  # fmt: skip
+        shutil.rmtree(holder, ignore_errors=True)
+        if removed.returncode != 0 and tree.exists():
+            print(
+                f"rollback incomplete: temporary worktree {tree} was not removed", file=sys.stderr
+            )
+
+
+def branch_tip(branch: str) -> str | None:
+    found = git("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}^{{commit}}")
+    return found.stdout.strip() if found.returncode == 0 else None
+
+
+def switch_into(state: RunState, start_new: bool) -> None:
+    """Create or check out the branch in the temporary tree and record that this run did it.
+
+    Signals are held while the switch runs and the record is taken (from the private tree's
+    HEAD), so an interrupt at that point is delivered only once the record exists.
+    """
+    with signals_deferred():
+        try:
+            if start_new:
+                run("git", "switch", "-q", "--no-track", "-c", state.branch)
+            else:
+                run("git", "switch", "-q", state.branch)  # refused if checked out elsewhere
+        finally:
+            head = git("symbolic-ref", "-q", "HEAD").stdout.strip()
+            if head == f"refs/heads/{state.branch}":
+                state.created = start_new
+                state.switched_tip = git("rev-parse", "HEAD").stdout.strip()
+
+
 def cmd_base(args: argparse.Namespace) -> None:
     spec = load(args.scenario)
     branch = check_branch(spec["base_branch"], "base")
     source = check_ref(args.source, "--from")
-    patch = safe_path(f"seeds/{spec['seed']}.patch")
-    ensure_clean()
-    run("git", "switch", "-q", "--no-track", "-c", branch, source)
-    paths = patch_paths(patch)
-    run("git", "apply", str(patch))
-    commit(paths, [seed_subject(spec), "Seeded defect, scripted."])
-    print(f"base branch {branch} from {source} with seed {spec['seed']}")
-    if args.push:
-        run("git", "push", "-q", "-u", "origin", branch)
+    state = RunState(branch)
+    with branch_lock(branch):
+        check_leftovers(branch)
+        if branch_tip(branch) is not None:
+            raise ScenarioError(f"base branch {branch} already exists")
+        try:
+            with temp_tree(source):
+                switch_into(state, start_new=True)
+                patch = safe_path(f"seeds/{spec['seed']}.patch")
+                paths = patch_paths(patch)
+                for path in paths:
+                    if (here() / path).exists():
+                        safe_path(path, write=True)
+                    else:
+                        safe_path_new(path)
+                run("git", "apply", str(patch))
+                commit(paths, [seed_subject(spec), "Seeded defect, scripted."], state)
+                if args.push:
+                    push(branch)
+                state.finished = True
+        except BaseException:
+            if args.push and state.made and remote_has(branch, state.made):
+                state.finished = True  # the remote accepted the push: the run is done
+            undo(state)
+            raise
+    print(
+        f"base branch {branch} from {source} with seed {spec['seed']} (your checkout is unchanged)"
+    )
+
+
+def safe_path_new(relative: str) -> Path:
+    """A path the run will create: it must not exist yet in the tree (not even ignored)."""
+    path = safe_path_parent(relative)
+    if path.exists() or path.is_symlink():
+        raise ScenarioError(f"{relative} already exists; not overwritten")
+    return path
+
+
+def safe_path_parent(relative: str) -> Path:
+    """Like safe_path for a file that does not exist yet: checks the path, not the file."""
+    if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+        raise ScenarioError(f"path must be relative to the repository: {relative!r}")
+    if relative.startswith(":") or relative.endswith("/") or os.path.normpath(relative) != relative:
+        raise ScenarioError(f"path must be a plain normalised file path: {relative!r}")
+    tree = here()
+    parent = (tree / relative).parent.resolve()
+    if not parent.is_relative_to(tree.resolve()):
+        raise ScenarioError(f"path leaves the repository: {relative!r}")
+    parts = tuple(p.casefold() for p in Path(relative).parts)
+    if any(parts[: len(denied)] == denied for denied in DENIED_DIRS):
+        raise ScenarioError(f"path is in a protected folder: {relative!r}")
+    return tree / relative
+
+
+def remote_has(branch: str, sha: str) -> bool:
+    """Whether origin's branch points at ``sha`` (the push completed before an interrupt)."""
+    found = git("ls-remote", "--exit-code", "origin", f"refs/heads/{branch}")
+    return found.returncode == 0 and found.stdout.split()[:1] == [sha]
+
+
+def push(branch: str) -> None:
+    run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
 
 
 def apply_step(step: dict, values: dict[str, str], spec: dict, clean: str) -> list[str]:
-    """Apply one step. Returns the paths it touched."""
+    """Apply one step in the temporary tree. Returns the paths it wrote."""
     if "revert_seed" in step:
         patch = safe_path(f"seeds/{spec['seed']}.patch")
         paths = patch_paths(patch)
         run("git", "apply", "-R", str(patch))
         return paths
     if "restore" in step:
-        safe_path(step["restore"])
+        safe_path_parent(step["restore"])
+        if (here() / step["restore"]).is_symlink():
+            raise ScenarioError(f"path is a symbolic link; not written: {step['restore']!r}")
         run("git", "checkout", clean, "--", step["restore"])
-    elif "replace" in step:
-        path = safe_path(step["replace"])
+        return [step["restore"]]
+    if "replace" in step:
+        path = (
+            safe_path(step["replace"], write=True) if (here() / step["replace"]).exists() else None
+        )
+        if path is None:
+            raise ScenarioError(f"replace: {step['replace']} does not exist")
         text = path.read_text(encoding="utf-8")
         if step["old"] not in text:
             raise ScenarioError(f"replace: text not found in {step['replace']}")
         path.write_text(text.replace(step["old"], step["new"], 1), encoding="utf-8")
-    elif "add_test" in step:
-        dest = safe_path(fill(step["dest"], values))
+        return [step["replace"]]
+    if "add_test" in step:
+        rel = fill(step["dest"], values)
+        text = fill(step["_template"], values)
+        if (here() / rel).exists() or (here() / rel).is_symlink():
+            # An existing tracked file is never overwritten. Re-adding the same test (as a later
+            # attempt of the same scenario does) is allowed only if the content is identical.
+            dest = safe_path(rel, write=True)
+            if dest.read_text(encoding="utf-8") != text:
+                raise ScenarioError(f"add_test: {rel} exists with other content; not overwritten")
+            return []
+        dest = safe_path_new(rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(fill(step["_template"], values), encoding="utf-8")
-    else:
-        raise ScenarioError(f"unknown step {step}")
-    return step_paths(step, values)
+        dest.write_text(text, encoding="utf-8")
+        return [rel]
+    raise ScenarioError(f"unknown step {step}")
 
 
 def cmd_attempt(args: argparse.Namespace) -> None:
     spec = load(args.scenario)
+    check_no_tool_names(args.key)
     values = tokens(check_key(args.key))
     attempt = next((a for a in spec["attempts"] if a["name"] == args.attempt), None)
     if attempt is None:
@@ -317,26 +706,38 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         raise ScenarioError("a live attempt needs --model (kept in the run record only)")
     branch = validate_attempt(spec, attempt, values)
     twin = attempt.get("twin", spec["twin"])
-    base = check_ref(spec["base_branch"], "base branch")
-    ensure_clean()
-    # Read templates now: switching branches may remove the scenarios folder.
+    base = check_ref(f"refs/heads/{spec['base_branch']}", "base branch")
+    # Templates come from the scenario folder of your checkout, read before the run.
     for step in attempt["steps"]:
         if "add_test" in step:
             step["_template"] = safe_path(step["add_test"]).read_text(encoding="utf-8")
+            check_no_tool_names(step["_template"])
     clean = clean_ref(spec)
-    if run("git", "branch", "--list", branch, capture=True):
-        ancestor = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", base, branch], cwd=ROOT, check=False
-        )
-        if ancestor.returncode != 0:
+    state = RunState(branch)
+    with branch_lock(branch):
+        check_leftovers(branch)
+        before = branch_tip(branch)
+        if (
+            before is not None
+            and git("merge-base", "--is-ancestor", base, f"refs/heads/{branch}").returncode != 0
+        ):
             raise ScenarioError(f"existing branch {branch} does not descend from {base}")
-        run("git", "switch", "-q", branch)
-    else:
-        run("git", "switch", "-q", "--no-track", "-c", branch, base)
-    touched: list[str] = []
-    for step in attempt["steps"]:
-        touched += apply_step(step, values, spec, clean)
-    sha = commit(touched, commit_message(fill(attempt["commit"], values), twin, author))
+        try:
+            with temp_tree(base if before is None else f"refs/heads/{branch}"):
+                switch_into(state, start_new=before is None)
+                written: list[str] = []
+                for step in attempt["steps"]:
+                    written += apply_step(step, values, spec, clean)
+                message = commit_message(fill(attempt["commit"], values), twin, author)
+                sha = commit(written, message, state)
+                if args.push:
+                    push(branch)
+                state.finished = True
+        except BaseException:
+            if args.push and state.made and remote_has(branch, state.made):
+                state.finished = True  # the remote accepted the push: the run is done
+            undo(state)
+            raise
     record = {
         "scenario": spec["id"],
         "attempt": args.attempt,
@@ -349,10 +750,9 @@ def cmd_attempt(args: argparse.Namespace) -> None:
         "claim": attempt["claim"],
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    print(f"{branch}: attempt {args.attempt} committed; run record {write_run_record(record)}")
+    print(f"{branch}: attempt {args.attempt} committed (your checkout is unchanged); "
+          f"run record {write_run_record(record)}")  # fmt: skip
     print(f"post in Jira: claim: {attempt['claim']}")
-    if args.push:
-        run("git", "push", "-q", "-u", "origin", branch)
     if args.open_pr:
         run(
             "gh",
@@ -389,11 +789,20 @@ def main(argv: list[str] | None = None) -> int:
     attempt.add_argument("--open-pr", action="store_true")
     attempt.set_defaults(fn=cmd_attempt)
     args = parser.parse_args(argv)
+
+    def stop(signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    # SIGTERM and SIGHUP roll back like Ctrl-C does.
+    previous = {s: signal.signal(s, stop) for s in (signal.SIGTERM, signal.SIGHUP)}
     try:
         args.fn(args)
     except ScenarioError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
     return 0
 
 
