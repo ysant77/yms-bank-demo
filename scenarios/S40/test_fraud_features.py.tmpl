@@ -29,10 +29,10 @@ def test_{TOKEN}_features_use_past_only(fraud_run):
         assert changes == [], changes[:5]
 
 
-def test_{TOKEN}_holdout_metrics(fraud_run, record_metric):
+def test_{TOKEN}_holdout_metrics(fraud_run):
     holdout_days = fraud_run.test_rows["day"]
     assert holdout_days.min() == 61 and holdout_days.max() == 90
     assert np.all(fraud_run.train_rows["day"] <= 45)
     assert np.all(fraud_run.valid_rows["day"] <= 60)
-    record_metric("auc", fraud_run.metrics["auc"])
-    record_metric("pr_auc", fraud_run.metrics["pr_auc"])
+    # The model test records auc and pr_auc in the CI report (each metric is written once).
+    assert np.isfinite(fraud_run.metrics["auc"]) and np.isfinite(fraud_run.metrics["pr_auc"])

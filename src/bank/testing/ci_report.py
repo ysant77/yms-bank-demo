@@ -1,11 +1,18 @@
-"""Pytest plugin that writes the ``aat-ci-report/1`` JSON report.
+"""Pytest plugin that writes the ``aat-ci-report/2`` JSON report.
 
 Enable it with ``-p bank.testing.ci_report`` (the project's pytest config does this) and write
 the report with ``--ci-report=PATH``. Tests record numbers through the ``record_metric``
-fixture. Model tests can record the sha256 of their training and live data through the
-``record_data_hashes`` fixture, which adds an optional ``data_hashes`` block. Head and base
-commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``, else from ``git rev-parse`` (``HEAD`` and
-``CI_BASE_REF``, default ``main``).
+fixture. A repeated measurement goes through ``record_samples`` and is stored as an object:
+``{"median", "iqr_low", "iqr_high", "min", "max", "runs"}`` in the unit of the samples (for
+``transfers_per_s``, transfers per second). The quartiles use ``statistics.quantiles(n=4,
+method="inclusive")``, which is linear interpolation between the samples (numpy's default). The
+spread is the jitter inside one test process: it does not include the difference between two CI
+jobs, so it is no noise band for comparing runs from different jobs. Version 2 of the format
+differs from version 1 only in that a metric value may be such an object. Each metric name is
+written once per run; a second write is refused. Model tests can record the sha256 of their
+training and live data through the ``record_data_hashes`` fixture, which adds an optional
+``data_hashes`` block. Head and base commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``,
+else from ``git rev-parse`` (``HEAD`` and ``CI_BASE_REF``, default ``main``).
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import json
 import math
 import os
 import re
+import statistics
 import subprocess
 import tomllib
 from collections.abc import Callable
@@ -25,7 +33,7 @@ import pytest
 
 from bank.migrate import parse as parse_migration
 
-SCHEMA = "aat-ci-report/1"
+SCHEMA = "aat-ci-report/2"
 COLLECTOR = pytest.StashKey["Collector"]()
 
 # (pattern at the start of a statement, operation name), checked in order.
@@ -124,17 +132,63 @@ def audit_vulnerabilities(path: str | None) -> int | None:
 class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
-        self.metrics: dict[str, float | int] = {}
+        self.metrics: dict[str, float | int | dict[str, float | int]] = {}
         self.data_hashes: dict[str, str] | None = None
 
-    def record(self, name: str, value: float | int) -> None:
+    # Names the plugin writes itself; a test may not set them (for example when audit.json is
+    # missing and the plugin would not write audit_vulns).
+    RESERVED = frozenset({"audit_vulns"})
+
+    def _check_name(self, name: str) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("metric name must be a non-empty string")
+        if name in self.RESERVED:
+            raise ValueError(f"metric {name} is written by the report plugin, not by a test")
+        if name in self.metrics:
+            # Another test could otherwise replace a measured value with any number it likes.
+            raise ValueError(f"metric {name} was already recorded in this run; it is written once")
+
+    @staticmethod
+    def _check_number(name: str, value: object) -> None:
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise TypeError(f"metric {name} must be a number, not {type(value).__name__}")
-        if not math.isfinite(value):
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:  # an int too large for a float
+            finite = False
+        if not finite:
             raise ValueError(f"metric {name} must be finite")
+
+    def record(self, name: str, value: float | int) -> None:
+        self._check_name(name)
+        self._check_number(name, value)
         self.metrics[name] = value
+
+    def record_samples(self, name: str, samples: list[float | int]) -> None:
+        """A repeated measurement, stored as its median, quartiles, minimum, maximum and count.
+        Everything is checked before anything is written, so a refused call changes nothing."""
+        self._check_name(name)
+        if not isinstance(samples, list):
+            raise TypeError(f"metric {name}: samples must be a list, not {type(samples).__name__}")
+        if len(samples) < 4:
+            raise ValueError(f"metric {name} needs at least 4 samples, not {len(samples)}")
+        for value in samples:
+            self._check_number(name, value)
+        try:
+            low, mid, high = statistics.quantiles(samples, n=4, method="inclusive")
+        except OverflowError:
+            raise ValueError(f"metric {name}: samples too large to summarise") from None
+        # float() keeps every value a plain JSON number, also for large integer samples.
+        summary = {
+            "median": float(mid),
+            "iqr_low": float(low),
+            "iqr_high": float(high),
+            "min": float(min(samples)),
+            "max": float(max(samples)),
+        }
+        if not all(math.isfinite(v) for v in summary.values()):
+            raise ValueError(f"metric {name}: the summary is not finite (samples too large)")
+        self.metrics[name] = summary | {"runs": len(samples)}
 
     def record_data_hashes(self, train: str, live: str) -> None:
         for name, value in (("train", train), ("live", live)):
@@ -200,13 +254,20 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     report = session.config.stash[COLLECTOR].build(session.config.rootpath)
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    # allow_nan=False: a strict JSON reader rejects NaN and Infinity, so they must never reach it.
+    target.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
 
 @pytest.fixture
 def record_metric(request: pytest.FixtureRequest) -> Callable[[str, float | int], None]:
     """Record a number for the report: ``record_metric("transfers_per_s", 412.0)``."""
     return request.config.stash[COLLECTOR].record
+
+
+@pytest.fixture
+def record_samples(request: pytest.FixtureRequest) -> Callable[[str, list[float | int]], None]:
+    """Record a repeated measurement: ``record_samples("transfers_per_s", [410.2, 398.7, ...])``."""
+    return request.config.stash[COLLECTOR].record_samples
 
 
 @pytest.fixture
