@@ -111,9 +111,31 @@ def env() -> dict[str, str]:
     # SIGTTIN and the run would wait for ever. Credentials must be non-interactive: git may not
     # prompt, and ssh runs in batch mode unless the caller set its own ssh command.
     extra = {"GIT_LITERAL_PATHSPECS": "1", "GIT_TERMINAL_PROMPT": "0"}
-    if "GIT_SSH_COMMAND" not in clean:
-        extra["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+    ssh = batch_ssh_command(clean)
+    if ssh:
+        extra["GIT_SSH_COMMAND"] = ssh
     return {**clean, **extra}
+
+
+_CORE_SSH: dict[Path, str] = {}
+
+
+def batch_ssh_command(clean: dict[str, str]) -> str | None:
+    """The ssh command for git steps, in batch mode, without dropping the user's own setting.
+    GIT_SSH_COMMAND outranks core.sshCommand and GIT_SSH, so it is set only when it keeps them:
+    - the caller's GIT_SSH_COMMAND or GIT_SSH: kept as it is (None);
+    - core.sshCommand in the repository: that command with " -o BatchMode=yes" added;
+    - neither: "ssh -o BatchMode=yes"."""
+    if clean.get("GIT_SSH_COMMAND") or clean.get("GIT_SSH"):
+        return None
+    if ROOT not in _CORE_SSH:
+        found = subprocess.run(
+            ["git", "config", "--get", "core.sshCommand"],
+            cwd=ROOT, text=True, capture_output=True, env=clean,
+        )  # fmt: skip
+        _CORE_SSH[ROOT] = found.stdout.strip() if found.returncode == 0 else ""
+    configured = _CORE_SSH[ROOT]
+    return f"{configured} -o BatchMode=yes" if configured else "ssh -o BatchMode=yes"
 
 
 def here() -> Path:
