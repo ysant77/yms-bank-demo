@@ -106,9 +106,10 @@ CI (`.github/workflows/ci.yml`, Linux only) has four jobs:
 model is a demo, not a real fraud system.** No real people, cards, merchants or institutions
 are used.
 
-- `data.py` generates 200,000 card transactions over 90 days from a fixed seed, with about 0.5%
-  fraud that depends on merchant category, hour, amount and account age. Every fraud gets a
-  later chargeback; `chargebacks_30d_before` counts the account's chargebacks in the 30 days
+- `data.py` generates 200,000 card transactions over 90 days from a fixed seed, with 0.53%
+  fraud overall (0.44% on the holdout) that depends on merchant category, hour, amount and
+  account age. Every fraud gets a chargeback 2 to 21 days later, and a few genuine
+  transactions get a dispute 3 to 31 days later; `chargebacks_30d_before` counts the account's chargebacks in the 30 days
   strictly before the transaction.
 - `features.py` builds the feature matrix. Each feature records its source time per row, and
   `past_only_violations` checks that no feature uses data from the transaction time or later.
@@ -134,7 +135,7 @@ hashes with `record_data_hashes`, which adds a `data_hashes` block to the CI rep
 clean code the holdout AUC is about 0.89 and the PR-AUC about 0.39.
 
 Labels are taken as final: a fraud near the end of a window counts as fraud even though its
-chargeback would arrive up to 31 days later. A real pipeline would leave a label-maturity gap of
+chargeback would arrive up to 21 days later. A real pipeline would leave a label-maturity gap of
 that length between the training data and the evaluation; this demo does not.
 
 ## Seeds

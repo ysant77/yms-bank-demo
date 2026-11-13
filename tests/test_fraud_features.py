@@ -86,20 +86,35 @@ def test_features_do_not_change_when_later_chargebacks_are_removed(fraud_run):
         assert changes == [], changes[:5]
 
 
-def test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time(fraud_run):
-    """A 10-day look-ahead that reports a source time just before the transaction still fails."""
-    txns, chargebacks = fraud_run.data.transactions, fraud_run.data.chargebacks
-    index = fraud_run.test_index
+@pytest.mark.parametrize("seed", [7, 8, 11])
+@pytest.mark.parametrize("ahead_s", [10 * DAY_S, 3_600])
+def test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time(seed, ahead_s):
+    """A look-ahead (10 days or 1 hour) that reports a source time just before the
+    transaction passes the source-time check and still fails the behavioural one."""
+    from fraud.data import generate
+    from fraud.model import FEATURE_SET, time_split
+
+    data = generate(seed)
+    txns, chargebacks = data.transactions, data.chargebacks
+    index = time_split(txns)[2]
     rows = take(txns, index)
     ahead = take(chargebacks, np.ones(len(chargebacks["ts"]), dtype=bool))
-    ahead["ts"] = ahead["ts"] - 10 * DAY_S  # every chargeback appears 10 days early
-    leaky = build(rows, ahead, fraud_run.feature_set)
+    ahead["ts"] = ahead["ts"] - ahead_s  # every chargeback appears early
+    leaky = build(rows, ahead, FEATURE_SET)
     j = leaky.names.index("chargebacks_30d_before")
     source = leaky.source_ts.copy()
     source[:, j] = np.where(source[:, j] != NO_SOURCE, leaky.ts - 1, NO_SOURCE)
     disguised = dataclasses.replace(leaky, source_ts=source)
     assert past_only_violations(disguised) == {}
-    assert later_data_changes(txns, chargebacks, disguised, index, fraud_run.feature_set) != []
+    assert later_data_changes(txns, chargebacks, disguised, index, FEATURE_SET) != []
+
+
+def test_the_behavioural_check_without_any_chargebacks(fraud_run):
+    txns = fraud_run.data.transactions
+    none = take(
+        fraud_run.data.chargebacks, np.zeros(len(fraud_run.data.chargebacks["ts"]), dtype=bool)
+    )
+    assert later_data_changes(txns, none, fraud_run.test, fraud_run.test_index, "v2") == []
 
 
 def test_chargeback_window_without_any_chargebacks():

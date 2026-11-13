@@ -50,7 +50,7 @@ is deterministic, so the metrics are the same on every run.
 | Clean | 0.888 | 0.393 | 0.625 | 0.0097 | 0.0036 | all pass |
 | `k7_feature_leak` | 0.983 | 0.628 | 0.784 | 0.0080 | 0.0047 | 5 fail: `test_features_use_past_only`, `test_history_features_have_source_times_before_the_transaction`, `test_chargeback_window_counts_only_earlier_chargebacks`, `test_features_do_not_change_when_later_chargebacks_are_removed`, `test_model_metrics_are_recorded` (AUC band) |
 | `k7_weak_model` | 0.849 | 0.079 | 0.268 | 0.0092 | 0.0025 | all pass |
-| both seeds | 0.977 | 0.278 | 0.491 | 0.0072 | - | the same 5 fail; S17 AC4 (`auc` at most 0.95) fails |
+| both seeds | 0.977 | 0.278 | 0.491 | 0.0072 | - | the same 5 fail; at data seed 7 they pass S17 AC1-AC3 and fail AC4 (`auc` at most 0.95); other data seeds were not measured for this row |
 
 The rendered acceptance tests were also run: S40 v1 (leak) fails `test_{TOKEN}_features_use_past_only`;
 S40 v2 (clean) passes with `pr_auc` 0.393; S17 v1 (weak) passes and records `pr_auc` 0.079.

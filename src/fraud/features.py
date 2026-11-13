@@ -135,18 +135,34 @@ def later_data_changes(
     """Rows whose features change when the chargebacks filed at or after them are removed.
 
     A behavioural past-only check that does not trust the recorded source times. ``matrix`` row
-    ``k`` must belong to transaction ``index[k]``. It samples up to ``rows`` rows whose account
-    has a later chargeback (the rows where future data exists to leak), rebuilds each one alone
-    from the chargebacks filed strictly before it, and compares. An empty result means no change.
+    ``k`` must belong to transaction ``index[k]``. Only rows whose account has a later
+    chargeback can leak, so it checks the ``rows`` of them with the smallest gap to that next
+    chargeback (a short look-ahead shows there first) plus ``rows // 3`` others drawn at random.
+    Each row is rebuilt alone from the chargebacks filed strictly before it and compared. An
+    empty result means no change.
+
+    Limits: it withholds only the chargeback table and rebuilds through the same ``build``
+    function. A feature that memoises by ``txn_id``, reads ``is_fraud`` or keeps state between
+    calls escapes it; the AUC cap (``auc`` at most 0.95) is the only check behind it.
     """
-    accounts = txns["account_id"][index]
-    latest = np.full(int(max(txns["account_id"].max(), chargebacks["account_id"].max())) + 1, -1)
-    np.maximum.at(latest, chargebacks["account_id"], chargebacks["ts"])
-    exposed = np.flatnonzero(latest[accounts] > txns["ts"][index])
+    if len(chargebacks["ts"]) == 0:
+        return []  # no later data exists to leak
+    shift = np.int64(1) << 32
+    keys = np.sort(chargebacks["account_id"].astype(np.int64) * shift + chargebacks["ts"])
+    base = txns["account_id"][index].astype(np.int64) * shift
+    ts = txns["ts"][index].astype(np.int64)
+    nxt = np.searchsorted(keys, base + ts, side="right")
+    found = nxt < len(keys)
+    gap = np.full(len(index), np.iinfo(np.int64).max)
+    same = found & (keys[np.minimum(nxt, len(keys) - 1)] < base + shift)
+    gap[same] = keys[nxt[same]] - base[same] - ts[same]
+    exposed = np.flatnonzero(same)
+    closest = exposed[np.argsort(gap[exposed], kind="stable")[:rows]]
+    rest = np.setdiff1d(exposed, closest)
     rng = np.random.default_rng(seed)
-    picks = rng.choice(exposed, min(rows, len(exposed)), replace=False)
+    extra = rng.choice(rest, min(rows // 3, len(rest)), replace=False)
     changes = []
-    for k in np.sort(picks):
+    for k in np.sort(np.concatenate([closest, extra])):
         i = index[k]
         past = take(chargebacks, chargebacks["ts"] < txns["ts"][i])
         alone = build(take(txns, np.array([i])), past, feature_set)
