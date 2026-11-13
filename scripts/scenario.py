@@ -118,16 +118,46 @@ def git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=here(), text=True, capture_output=True, env=env())
 
 
+# The command that is running now, so a repeated stop signal can end it (signals_deferred).
+CHILD: subprocess.Popen | None = None
+
+
+def spawn(args: list[str] | tuple[str, ...], cwd: Path) -> subprocess.CompletedProcess:
+    """Like subprocess.run with captured text output, but the child is known while it runs. It
+    gets its own process group, so the script decides when it stops, and a stop reaches the hooks
+    it started too (a hook that still holds the output pipes would otherwise keep us waiting)."""
+    global CHILD
+    proc = subprocess.Popen(
+        args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env(),
+        process_group=0,
+    )  # fmt: skip
+    CHILD = proc
+    try:
+        out, err = proc.communicate()
+    except BaseException:
+        stop_group(proc, signal.SIGKILL)
+        proc.wait()
+        raise
+    finally:
+        CHILD = None
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
+
+
+def stop_group(proc: subprocess.Popen, sig: int) -> None:
+    try:
+        os.killpg(proc.pid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def run(*args: str, capture: bool = False, cwd: Path | None = None) -> str:
     try:
-        result = subprocess.run(
-            args, cwd=cwd or here(), check=True, text=True, capture_output=True, env=env()
-        )
-    except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or "").strip().splitlines()[-1:] or [""]
-        raise ScenarioError(f"{args[0]} {args[1]} failed: {detail[0]}") from None
+        result = spawn(args, cwd or here())
     except FileNotFoundError:
         raise ScenarioError(f"{args[0]} is not installed") from None
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().splitlines()[-1:] or [""]
+        raise ScenarioError(f"{args[0]} {args[1]} failed: {detail[0]}")
     return result.stdout.strip() if capture else ""
 
 
@@ -176,6 +206,11 @@ def load(scenario: str) -> dict:
             raise ScenarioError(f"attempt {attempt['name']}: claim is malformed")
         if "twin" in attempt:
             check_text({"twin": attempt["twin"]}, "twin")
+        # Two twins on one ticket (S32): an attempt may have its own branch and PR title.
+        if "twin_branch" in attempt and not isinstance(attempt["twin_branch"], str):
+            raise ScenarioError(f"attempt {attempt['name']}: twin_branch must be a string")
+        if "pr_title" in attempt:
+            check_text({"pr_title": attempt["pr_title"]}, "pr_title")
     return spec
 
 
@@ -290,7 +325,7 @@ def step_paths(step: dict, values: dict[str, str]) -> list[str]:
 def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
     """Check every branch and path of an attempt before git is touched. Returns the branch."""
     check_branch(spec["base_branch"], "base")
-    branch = check_branch(fill(spec["twin_branch"], values), "twin")
+    branch = check_branch(fill(attempt.get("twin_branch", spec["twin_branch"]), values), "twin")
     if not re.search(rf"(^|[/-]){re.escape(values['key_lower'])}($|-)", branch):
         raise ScenarioError(f"twin branch {branch!r} must contain the issue key {values['KEY']}")
     for step in attempt["steps"]:
@@ -369,11 +404,18 @@ def signals_deferred() -> Iterator[None]:
     """Hold Ctrl-C, SIGTERM and SIGHUP while a git step and the record of what it did are taken
     together. A signal that arrives meanwhile is only noted, and raised as KeyboardInterrupt right
     after, when the record exists. Done with Python handlers (they always run in the main
-    thread), not a thread signal mask, which other threads could bypass."""
+    thread), not a thread signal mask, which other threads could bypass.
+
+    A git step can block (a hook that waits), and a signal sent only to this process does not
+    reach the child. So a second stop signal ends the running child with SIGTERM, and a third with
+    SIGKILL; the step then fails, its record is still taken, and the run rolls back."""
     pending: list[int] = []
 
     def hold(signum: int, _frame: object) -> None:
         pending.append(signum)
+        child = CHILD
+        if len(pending) >= 2 and child is not None:
+            stop_group(child, signal.SIGTERM if len(pending) == 2 else signal.SIGKILL)
 
     previous = {s: signal.signal(s, hold) for s in STOP_SIGNALS}
     try:
@@ -401,14 +443,38 @@ def commit(paths: list[str], message: list[str], state: RunState | None = None) 
     args = ["git", "commit", "-q"]
     for part in message:
         args += ["-m", part]
+    before = run("git", "rev-parse", "HEAD", capture=True)
     with signals_deferred():
-        run(*args)
-        if state is not None:
-            state.made = run("git", "rev-parse", "HEAD", capture=True)
+        try:
+            run(*args)
+        finally:
+            # Taken even when the commit was stopped: a commit that exists must be undone.
+            if state is not None:
+                head = run("git", "rev-parse", "HEAD", capture=True)
+                if head != before:
+                    state.made = head
     left = run("git", "status", "--porcelain", capture=True)
     if left:
         raise ScenarioError(f"changes left out of the commit: {left.splitlines()[:5]}")
     return run("git", "rev-parse", "HEAD", capture=True)
+
+
+def run_record(
+    spec: dict, args: argparse.Namespace, twin: str, author: str, branch: str, sha: str,
+    attempt: dict,
+) -> dict:  # fmt: skip
+    return {
+        "scenario": spec["id"],
+        "attempt": args.attempt,
+        "key": args.key,
+        "twin": twin,
+        "author": author,
+        "model": args.model if author == "live" else None,
+        "branch": branch,
+        "commit": sha,
+        "claim": attempt["claim"],
+        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
 
 
 def runs_dir() -> Path:
@@ -548,15 +614,17 @@ def temp_tree(start: str) -> Iterator[Path]:
         yield tree
     finally:
         TREE = None
-        removed = subprocess.run(
-            ["git", "worktree", "remove", "--force", str(tree)],
-            cwd=ROOT, text=True, capture_output=True, env=env(),
-        )  # fmt: skip
-        shutil.rmtree(holder, ignore_errors=True)
-        if removed.returncode != 0 and tree.exists():
-            print(
-                f"rollback incomplete: temporary worktree {tree} was not removed", file=sys.stderr
-            )
+        # The clean-up is not stopped half way: a stop signal is held until it is done (a
+        # repeated one still ends a blocked git step), and anything left is named.
+        with signals_deferred():
+            removed = spawn(["git", "worktree", "remove", "--force", str(tree)], ROOT)
+            shutil.rmtree(holder, ignore_errors=True)
+            if holder.exists() or (removed.returncode != 0 and tree.exists()):
+                print(
+                    f"rollback incomplete: temporary folder {holder} was not removed; "
+                    f"run: git worktree remove --force {tree}; rm -rf {holder}",
+                    file=sys.stderr,
+                )
 
 
 def branch_tip(branch: str) -> str | None:
@@ -608,8 +676,8 @@ def cmd_base(args: argparse.Namespace) -> None:
                     push(branch)
                 state.finished = True
         except BaseException:
-            if args.push and state.made and remote_has(branch, state.made):
-                state.finished = True  # the remote accepted the push: the run is done
+            if args.push and pushed_before_interrupt(branch, state):
+                print(f"interrupted after the push of {branch} completed; the branch is kept")
             undo(state)
             raise
     print(
@@ -649,6 +717,17 @@ def remote_has(branch: str, sha: str) -> bool:
 
 def push(branch: str) -> None:
     run("git", "push", "-q", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+
+
+def pushed_before_interrupt(branch: str, state: RunState) -> bool:
+    """An interrupt came after the remote accepted the push: the run is done. The upstream
+    setting that `push -u` makes last may be missing, so it is set here."""
+    if not (state.made and remote_has(branch, state.made)):
+        return False
+    state.finished = True
+    git("config", f"branch.{branch}.remote", "origin")
+    git("config", f"branch.{branch}.merge", f"refs/heads/{branch}")
+    return True
 
 
 def apply_step(step: dict, values: dict[str, str], spec: dict, clean: str) -> list[str]:
@@ -734,22 +813,14 @@ def cmd_attempt(args: argparse.Namespace) -> None:
                     push(branch)
                 state.finished = True
         except BaseException:
-            if args.push and state.made and remote_has(branch, state.made):
-                state.finished = True  # the remote accepted the push: the run is done
+            if args.push and pushed_before_interrupt(branch, state):
+                # The run is done; its record is written before the interrupt goes on.
+                done = run_record(spec, args, twin, author, branch, state.made, attempt)
+                path = write_run_record(done)
+                print(f"interrupted after the push of {branch} completed; run record {path}")
             undo(state)
             raise
-    record = {
-        "scenario": spec["id"],
-        "attempt": args.attempt,
-        "key": args.key,
-        "twin": twin,
-        "author": author,
-        "model": args.model if author == "live" else None,
-        "branch": branch,
-        "commit": sha,
-        "claim": attempt["claim"],
-        "at": datetime.now(UTC).isoformat(timespec="seconds"),
-    }
+    record = run_record(spec, args, twin, author, branch, sha, attempt)
     print(f"{branch}: attempt {args.attempt} committed (your checkout is unchanged); "
           f"run record {write_run_record(record)}")  # fmt: skip
     print(f"post in Jira: claim: {attempt['claim']}")
@@ -765,7 +836,7 @@ def cmd_attempt(args: argparse.Namespace) -> None:
             "--head",
             branch,
             "--title",
-            fill(spec["pr_title"], values),
+            fill(attempt.get("pr_title", spec["pr_title"]), values),
             "--body",
             pr_body(spec, args.key, twin, author),
         )

@@ -5,6 +5,10 @@ branch, the twin branch, and one or more attempts. `scripts/scenario.py` builds 
 templates use `{KEY}` (for example `BANK-3`) and `{TOKEN}` (`BANK3`), so test names carry the
 Jira issue key and the verifier can match them to acceptance criteria.
 
+An attempt may set its own `twin`, `twin_branch` and `pr_title`. Two twins can then open two pull
+requests on one ticket (S32: Raj and Kai fix the same race); every branch rule below applies to
+each attempt's branch, and both start from the base branch.
+
 Every attempt is labelled in its commit body and pull request body as `scripted` (a change
 written in advance) or `live` (written during the run). Commit and pull request text never
 name a tool or model; for a live attempt the model is recorded only in the untracked run record
@@ -60,3 +64,15 @@ starts with `refused:`.
   under `.git/scenario-locks/` by hand.
 - The run stops on SIGHUP even when started with `nohup`, because the script installs its own
   handler.
+- A stop signal sent only to the script's process (not to its process group) is held while a git
+  step runs. If the step blocks, for example in a hook that waits, send the signal again: the
+  second ends the git step and its hooks (SIGTERM), a third kills them (SIGKILL), and the run rolls
+  back. The git steps run in their own process group, so Ctrl-C in the terminal reaches only the
+  script, which then stops them.
+- If the run is interrupted during `git push` before the remote has accepted the branch, the local
+  branch is rolled back, but the remote can still receive it a moment later. Check with
+  `git ls-remote origin <branch>` and delete the remote branch if you do not want it.
+- If the remote has accepted the push before the interrupt, the run counts as finished: the branch
+  is kept, its upstream is set, and (for an attempt) the run record is written.
+- The temporary worktree is removed with stop signals held, and anything that could not be
+  removed is named with the commands to remove it. Only `kill -9` can still leave a folder.
