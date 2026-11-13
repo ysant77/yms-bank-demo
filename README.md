@@ -83,7 +83,9 @@ uv run pytest -m "bench or not bench" --ci-report=ci-report.json
 
 The report follows the `aat-ci-report/1` format (`aat` stands for *agentic agile team*, the
 issue-tracker verifier that reads it): test ids with outcomes and durations, metrics
-recorded with the `record_metric(name, value)` fixture (for example `transfers_per_s`), an
+recorded with the `record_metric(name, value)` fixture, repeated measurements recorded with
+`record_samples(name, samples)` as `{median, iqr_low, iqr_high, runs}` (the benchmark reports
+`transfers_per_s` this way, from 20 runs), an
 optional `data_hashes` block from the `record_data_hashes(train, live)` fixture, locked
 dependency versions from `uv.lock`, a sha256 of every file under `.github/workflows/`, head
 and base commits from `CI_HEAD_SHA`/`CI_BASE_SHA` (or `git rev-parse` of `HEAD` and

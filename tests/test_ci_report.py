@@ -200,3 +200,24 @@ def test_model(record_data_hashes):
 def test_record_data_hashes_rejects_non_digests(value):
     with pytest.raises(ValueError):
         Collector().record_data_hashes(value, "a" * 64)
+
+
+def test_record_samples_keeps_median_iqr_and_runs():
+    c = Collector()
+    c.record_samples("transfers_per_s", [400.0, 410.0, 420.0, 430.0, 440.0])
+    assert c.metrics["transfers_per_s"] == {
+        "median": 420.0,
+        "iqr_low": 410.0,
+        "iqr_high": 430.0,
+        "runs": 5,
+    }
+
+
+@pytest.mark.parametrize("samples", [[1.0, 2.0, 3.0], [1.0, 2.0, float("nan"), 4.0], "1234"])
+def test_record_samples_rejects_too_few_or_bad_values(samples):
+    with pytest.raises((ValueError, TypeError)):
+        Collector().record_samples("x", samples)
+
+
+def test_record_samples_fixture_is_available(record_samples):
+    assert callable(record_samples)

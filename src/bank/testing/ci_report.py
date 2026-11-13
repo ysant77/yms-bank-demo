@@ -15,6 +15,7 @@ import json
 import math
 import os
 import re
+import statistics
 import subprocess
 import tomllib
 from collections.abc import Callable
@@ -124,7 +125,7 @@ def audit_vulnerabilities(path: str | None) -> int | None:
 class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
-        self.metrics: dict[str, float | int] = {}
+        self.metrics: dict[str, float | int | dict[str, float | int]] = {}
         self.data_hashes: dict[str, str] | None = None
 
     def record(self, name: str, value: float | int) -> None:
@@ -135,6 +136,21 @@ class Collector:
         if not math.isfinite(value):
             raise ValueError(f"metric {name} must be finite")
         self.metrics[name] = value
+
+    def record_samples(self, name: str, samples: list[float | int]) -> None:
+        """A repeated measurement: the report holds its median, interquartile range and count, so
+        a reader can tell a real difference from run-to-run noise."""
+        if not isinstance(samples, list) or len(samples) < 4:
+            raise ValueError(f"metric {name} needs at least 4 samples")
+        for value in samples:
+            self.record(name, value)  # the same checks as a single number
+        low, mid, high = statistics.quantiles(samples, n=4, method="inclusive")
+        self.metrics[name] = {
+            "median": round(mid, 3),
+            "iqr_low": round(low, 3),
+            "iqr_high": round(high, 3),
+            "runs": len(samples),
+        }
 
     def record_data_hashes(self, train: str, live: str) -> None:
         for name, value in (("train", train), ("live", live)):
@@ -207,6 +223,12 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 def record_metric(request: pytest.FixtureRequest) -> Callable[[str, float | int], None]:
     """Record a number for the report: ``record_metric("transfers_per_s", 412.0)``."""
     return request.config.stash[COLLECTOR].record
+
+
+@pytest.fixture
+def record_samples(request: pytest.FixtureRequest) -> Callable[[str, list[float | int]], None]:
+    """Record a repeated measurement: ``record_samples("transfers_per_s", [410.2, 398.7, ...])``."""
+    return request.config.stash[COLLECTOR].record_samples
 
 
 @pytest.fixture
