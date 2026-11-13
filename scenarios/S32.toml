@@ -1,0 +1,77 @@
+id = "S32"
+title = "Two twins fix the same withdrawal race"
+seed = "k1_race"
+base_branch = "test/s32-seed-withdraw-race"
+twin_branch = "fix/{key_lower}-withdraw-race"
+pr_title = "{KEY}: stop concurrent withdrawals from overdrawing"
+twin = "Raj"
+author = "scripted"
+
+[ticket]
+type = "Bug"
+points = 5
+summary = "Concurrent withdrawals must never overdraw an account"
+acceptance_criteria = """
+AC1 | Two withdrawals of 80.00 from 100.00 started together succeed at most once | test_passes(test_{TOKEN}_concurrent_withdrawals_20_threads)
+AC2 | The balance equals 100.00 minus the successful withdrawals and never goes below 0.00 | test_passes(test_{TOKEN}_balance_matches_withdrawals)
+"""
+
+# Raj: the real fix. One write transaction from read to write (the clean code); small diff.
+[[attempts]]
+name = "v1"
+commit = "fix(ledger): debit inside one write transaction with a conditional update"
+claim = "ready"
+steps = [
+  { restore = "src/bank/ledger.py" },
+  { add_test = "scenarios/S04/test_withdraw_race.py.tmpl", dest = "tests/test_{token}_withdraw_race.py" },
+]
+
+# Kai: a second fix that also passes the tests. A process-wide lock around the seeded code; it
+# protects one process only, so it is weaker for a bank with several workers. Larger diff.
+[[attempts]]
+name = "v2"
+twin = "Kai"
+twin_branch = "feat/{key_lower}-withdraw-race-lock"
+pr_title = "{KEY}: serialise withdrawals with a process lock"
+commit = "fix(ledger): serialise withdrawals with a process-wide lock"
+claim = "ready"
+steps = [
+  { replace = "src/bank/ledger.py", old = """import sqlite3
+import time
+""", new = """import sqlite3
+import threading
+import time
+""" },
+  { replace = "src/bank/ledger.py", old = """def withdraw(""", new = """# One withdrawal at a time in this process, from the balance check to the debit.
+_WITHDRAW_LOCK = threading.Lock()
+
+
+def withdraw(""" },
+  { replace = "src/bank/ledger.py", old = """    account = _require(conn, account_id, amount)
+    if account.balance_minor < amount.minor:
+        raise InsufficientFunds(f"insufficient funds in {account.number}")
+    time.sleep(0.01)
+    with write_txn(conn):
+        conn.execute(
+            "UPDATE accounts SET balance_minor = ? WHERE id = ?",
+            (account.balance_minor - amount.minor, account.id),
+        )
+        clearing = _clearing_account(conn, amount.currency)
+        _credit(conn, clearing, amount.minor)
+        lines = [(account.id, -amount.minor), (clearing, amount.minor)]
+        return _post(conn, "withdrawal", description, amount.currency, lines, at)""", new = """    with _WITHDRAW_LOCK:
+        account = _require(conn, account_id, amount)
+        if account.balance_minor < amount.minor:
+            raise InsufficientFunds(f"insufficient funds in {account.number}")
+        time.sleep(0.01)
+        with write_txn(conn):
+            conn.execute(
+                "UPDATE accounts SET balance_minor = ? WHERE id = ?",
+                (account.balance_minor - amount.minor, account.id),
+            )
+            clearing = _clearing_account(conn, amount.currency)
+            _credit(conn, clearing, amount.minor)
+            lines = [(account.id, -amount.minor), (clearing, amount.minor)]
+            return _post(conn, "withdrawal", description, amount.currency, lines, at)""" },
+  { add_test = "scenarios/S04/test_withdraw_race.py.tmpl", dest = "tests/test_{token}_withdraw_race.py" },
+]
