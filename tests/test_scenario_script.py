@@ -4,6 +4,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -191,6 +192,10 @@ def demo_repo(tmp_path, monkeypatch):
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "chore: add the demo scenario")
     monkeypatch.setattr(scenario, "ROOT", repo)
+    # The script's temporary trees go under this test's folder, never the shared temp dir.
+    temp = tmp_path / "tmp"
+    temp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temp))
     return repo
 
 
@@ -859,3 +864,75 @@ def test_a_signal_while_the_commit_is_recorded_is_held(demo_repo, monkeypatch):
         scenario.main(["base", "S98", "--from", "main"])
     assert sent
     assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+
+
+def test_a_repeated_signal_ends_a_blocked_git_step_and_rolls_back(demo_repo):
+    """A hook that waits, and stop signals sent only to the script: the first is held, the
+    second ends the git child, and the run rolls back instead of waiting."""
+    import signal
+    import threading
+    import time
+
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    started = demo_repo / "hook-started"
+    hook(demo_repo, "pre-commit", f"touch {started}; sleep 30")
+
+    def signal_twice():
+        for _ in range(200):
+            if started.exists():
+                break
+            time.sleep(0.05)
+        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(0.3)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    sender = threading.Thread(target=signal_twice)
+    sender.start()
+    began = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"])
+    sender.join()
+    assert time.monotonic() - began < 20
+    assert git(demo_repo, "branch", "--list", "fix/bank-9-demo") == ""
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_signal_during_the_tree_clean_up_is_held_until_it_is_done(demo_repo, monkeypatch):
+    import signal
+
+    real = scenario.spawn
+
+    def signal_in_remove(args, cwd):
+        if "remove" in args:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real(args, cwd)
+
+    monkeypatch.setattr(scenario, "spawn", signal_in_remove)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main"])
+    assert list(Path(tempfile.gettempdir()).glob("scenario-run-*")) == []
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_push_finished_before_an_interrupt_sets_upstream_and_writes_the_record(
+    demo_repo, tmp_path, monkeypatch
+):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(demo_repo, "remote", "add", "origin", str(remote))
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+
+    def push_without_upstream_then_interrupt(branch):
+        scenario.run("git", "push", "-q", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(scenario, "push", push_without_upstream_then_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["attempt", "S98", "v1", "--key", "BANK-9", "--push"])
+    branch = "fix/bank-9-demo"
+    local = git(demo_repo, "rev-parse", f"refs/heads/{branch}").strip()
+    assert git(remote, "rev-parse", f"refs/heads/{branch}").strip() == local
+    assert git(demo_repo, "config", f"branch.{branch}.remote").strip() == "origin"
+    assert git(demo_repo, "config", f"branch.{branch}.merge").strip() == f"refs/heads/{branch}"
+    records = list((demo_repo / ".git" / "scenario-runs").glob("S98-v1-*.json"))
+    assert len(records) == 1
