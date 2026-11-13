@@ -124,26 +124,57 @@ async function sendTransfer(event) {
   const form = event.target;
   const status = $("#transfer-status");
   const button = $("#send-button");
-  const data = Object.fromEntries(new FormData(form));
-  const body = {
-    from_account_id: Number(data.from_account_id),
-    to_account_number: data.to_account_number.trim(),
-    amount: data.amount.trim(),
-    reference: data.reference.trim() || null,
-  };
   button.disabled = true;
   try {
-    const result = await api("/api/transfers", { method: "POST", body: JSON.stringify(body) });
+    const data = Object.fromEntries(new FormData(form));
+    const body = {
+      from_account_id: Number(data.from_account_id),
+      to_account_number: data.to_account_number.trim(),
+      amount: data.amount.trim(),
+      reference: data.reference.trim() || null,
+    };
+    // The key belongs to this exact request: a retry of the same request reuses it and cannot
+    // move money twice; an edited request gets a new key.
+    const bodyText = JSON.stringify(body);
+    let result;
+    try {
+      if (form.dataset.idempotencyBody !== bodyText) {
+        form.dataset.idempotencyKey = crypto.randomUUID();
+        form.dataset.idempotencyBody = bodyText;
+      }
+      result = await api("/api/transfers", {
+        method: "POST",
+        body: bodyText,
+        headers: { "Content-Type": "application/json", "Idempotency-Key": form.dataset.idempotencyKey },
+      });
+    } catch (error) {
+      // 422 means the key was refused for this body: start over with a new key next time.
+      if (error.status === 422) {
+        delete form.dataset.idempotencyKey;
+        delete form.dataset.idempotencyBody;
+      }
+      status.className = "notice notice-error";
+      status.textContent = `Transfer failed: ${error.message}`;
+      status.hidden = false;
+      return;
+    }
+    // The money has moved. A failure from here on must not say "Transfer failed", or the user
+    // may send it again under a new key.
+    delete form.dataset.idempotencyKey;
+    delete form.dataset.idempotencyBody;
     status.className = "notice notice-ok";
-    status.textContent = `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`;
+    status.textContent = result
+      ? `Transfer sent: ${result.amount} ${result.currency} to ${result.to_account_number}.`
+      : "Transfer sent.";
+    status.hidden = false;
     form.amount.value = "";
     form.reference.value = "";
-    await renderTransfer();
-  } catch (error) {
-    status.className = "notice notice-error";
-    status.textContent = `Transfer failed: ${error.message}`;
+    try {
+      await renderTransfer();
+    } catch (error) {
+      status.textContent += ` The balances did not refresh (${error.message}); reload the page.`;
+    }
   } finally {
-    status.hidden = false;
     button.disabled = false;
   }
 }

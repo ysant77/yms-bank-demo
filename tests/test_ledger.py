@@ -132,3 +132,140 @@ def test_statement_rejects_reversed_range(conn, two_accounts):
     a, _ = two_accounts
     with pytest.raises(ledger.LedgerError):
         ledger.statement(conn, a.id, date(2026, 5, 2), date(2026, 5, 1))
+
+
+def test_run_once_runs_a_job_once(conn):
+    runs = []
+    assert ledger.run_once(conn, "job", lambda c: runs.append(1)) is True
+    assert ledger.run_once(conn, "job", lambda c: runs.append(1)) is False
+    assert runs == [1]
+
+
+def test_a_failed_job_leaves_nothing_and_runs_again(conn):
+    def half_done(c):
+        ledger.create_customer(c, "Written Before The Failure")
+        raise RuntimeError("disk full")
+
+    with pytest.raises(RuntimeError):
+        ledger.run_once(conn, "job", half_done)
+    assert ledger.list_customers(conn) == []
+    assert not conn.in_transaction
+    assert ledger.run_once(conn, "job", lambda c: ledger.create_customer(c, "Second Try")) is True
+    assert [c["name"] for c in ledger.list_customers(conn)] == ["Second Try"]
+
+
+def test_a_nested_write_failure_undoes_only_its_block(conn):
+    from bank.db import nesting_allowed, write_txn
+
+    with write_txn(conn), nesting_allowed(conn):
+        ledger.create_customer(conn, "Kept")
+        with pytest.raises(ledger.LedgerError):
+            with write_txn(conn):
+                ledger.create_customer(conn, "Undone")
+                raise ledger.LedgerError("inner failure")
+    assert [c["name"] for c in ledger.list_customers(conn)] == ["Kept"]
+
+
+def test_two_threads_run_a_job_once(tmp_path, run_together):
+    """The second caller passes the first check while the first job runs, so only the check
+    after the write lock stops it from running the job again."""
+    import threading
+    import time
+
+    path = tmp_path / "once.db"
+    ledger.open_db(path).close()
+    runs = []
+    lock = threading.Lock()
+
+    def job(c):
+        with lock:
+            runs.append(1)
+        time.sleep(0.5)  # hold the write lock while the other thread checks the flag
+
+    def worker(start):
+        c = ledger.open_db(path)
+        try:
+            start()
+            ledger.run_once(c, "job", job)
+        finally:
+            c.close()
+
+    assert run_together(2, worker) == []
+    assert runs == [1]
+
+
+def test_a_stray_transaction_is_not_joined_silently(conn, two_accounts):
+    """Outside run_once, a write on a connection with an open transaction raises as before."""
+    import sqlite3
+
+    a, b = two_accounts
+    conn.execute("BEGIN")
+    with pytest.raises(sqlite3.OperationalError, match="within a transaction"):
+        ledger.transfer(conn, a.id, b.id, Money.of("1.00", "EUR"))
+    conn.execute("ROLLBACK")
+
+
+class FailingUndo:
+    """A connection whose undo statements fail, to check they cannot hide the real error."""
+
+    in_transaction = True
+
+    def execute(self, sql):
+        if sql.startswith(("ROLLBACK", "RELEASE")):
+            raise __import__("sqlite3").OperationalError("undo failed")
+
+
+def test_a_failed_undo_raises_chained_to_the_original_error():
+    import sqlite3
+
+    from bank.db import nesting_allowed, write_txn
+
+    fake = FailingUndo()
+    with pytest.raises(sqlite3.OperationalError, match="undo failed") as nested:
+        with nesting_allowed(fake), write_txn(fake):
+            raise ValueError("original")
+    assert isinstance(nested.value.__cause__, ValueError)
+    fake.in_transaction = False
+    with pytest.raises(sqlite3.OperationalError, match="undo failed") as outer:
+        with write_txn(fake):
+            raise ValueError("original")
+    assert isinstance(outer.value.__cause__, ValueError)
+
+
+class RollbackToFails(__import__("sqlite3").Connection):
+    """A real connection whose ROLLBACK TO fails, as a disk or I/O error might make it."""
+
+    def execute(self, sql, *args):
+        if sql.startswith("ROLLBACK TO"):
+            raise __import__("sqlite3").OperationalError("simulated ROLLBACK TO failure")
+        return super().execute(sql, *args)
+
+
+def test_a_failed_rollback_to_stops_the_job_and_commits_nothing(tmp_path):
+    """The job swallows the domain error, as seed_data.build does with InsufficientFunds; the
+    failed undo must still stop it, and the outer transaction must commit nothing."""
+    import sqlite3
+
+    from bank.db import write_txn
+    from bank.migrate import migrate_up
+
+    path = tmp_path / "undo.db"
+    ledger.open_db(path).close()
+    conn = sqlite3.connect(path, isolation_level=None, factory=RollbackToFails)
+    conn.row_factory = sqlite3.Row
+    migrate_up(conn)
+
+    def job(c):
+        ledger.create_customer(c, "Before The Failure")
+        try:
+            with write_txn(c):
+                c.execute("INSERT INTO customers (name, created_at) VALUES ('Partial', 'x')")
+                raise ledger.InsufficientFunds("no money")
+        except ledger.InsufficientFunds:
+            pass  # swallowed, as the seed does
+
+    with pytest.raises(sqlite3.OperationalError, match="simulated ROLLBACK TO failure"):
+        ledger.run_once(conn, "job", job)
+    assert not conn.in_transaction
+    assert ledger.list_customers(conn) == []
+    assert conn.execute("SELECT COUNT(*) FROM app_flags").fetchone()[0] == 0

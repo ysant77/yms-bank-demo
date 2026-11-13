@@ -12,12 +12,15 @@ only succeeds when the funds are there, so concurrent withdrawals cannot overdra
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from bank.db import connect, write_txn
+from bank.db import connect, nesting_allowed, write_txn
 from bank.migrate import migrate_up
 from bank.money import Money, exponent
 
@@ -258,6 +261,23 @@ def withdraw(
         return _post(conn, "withdrawal", description, amount.currency, lines, at)
 
 
+def _transfer_in_txn(
+    conn: sqlite3.Connection,
+    from_account_id: int,
+    to_account_id: int,
+    amount: Money,
+    reference: str | None,
+    at: datetime | None,
+) -> int:
+    source = _require(conn, from_account_id, amount)
+    target = _require(conn, to_account_id, amount)
+    _debit(conn, source, amount.minor)
+    _credit(conn, target.id, amount.minor)
+    lines = [(source.id, -amount.minor), (target.id, amount.minor)]
+    description = f"Transfer {source.number} to {target.number}"
+    return _post(conn, "transfer", description, amount.currency, lines, at, reference)
+
+
 def transfer(
     conn: sqlite3.Connection,
     from_account_id: int,
@@ -269,13 +289,108 @@ def transfer(
     if from_account_id == to_account_id:
         raise LedgerError("cannot transfer to the same account")
     with write_txn(conn):
-        source = _require(conn, from_account_id, amount)
-        target = _require(conn, to_account_id, amount)
-        _debit(conn, source, amount.minor)
-        _credit(conn, target.id, amount.minor)
-        lines = [(source.id, -amount.minor), (target.id, amount.minor)]
-        description = f"Transfer {source.number} to {target.number}"
-        return _post(conn, "transfer", description, amount.currency, lines, at, reference)
+        return _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, at)
+
+
+class IdempotencyConflict(LedgerError):
+    """The idempotency key was already used for a different request."""
+
+
+IDEMPOTENCY_WINDOW_SECONDS = 24 * 60 * 60
+
+
+def request_fingerprint(
+    from_account_id: int, to_account_id: int, amount: Money, reference: str | None
+) -> str:
+    """Hash of the transfer's meaning, so "10.0" and "10.00" are the same request."""
+    canonical = json.dumps(
+        [from_account_id, to_account_id, amount.minor, amount.currency, reference or ""],
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def transfer_once(
+    conn: sqlite3.Connection,
+    customer_id: int,
+    key: str,
+    from_account_id: int,
+    to_account_id: int,
+    amount: Money,
+    reference: str | None = None,
+    now: datetime | None = None,
+) -> tuple[dict[str, object], bool]:
+    """Post a transfer at most once per (customer, key) within 24 hours.
+
+    The key is checked and stored in the same write transaction as the postings, so a retry
+    after a timeout returns the first result instead of moving money twice. The stored result
+    is the one the first request saw, so a replay does not show later balances. A failed
+    attempt (for example insufficient funds) stores nothing, so the client may retry it.
+    Returns ``(result, replayed)``.
+    """
+    if from_account_id == to_account_id:
+        raise LedgerError("cannot transfer to the same account")
+    now = now or datetime.now(UTC)
+    fingerprint = request_fingerprint(from_account_id, to_account_id, amount, reference)
+    oldest = timestamp(now - timedelta(seconds=IDEMPOTENCY_WINDOW_SECONDS))
+    with write_txn(conn):
+        conn.execute(
+            "DELETE FROM idempotency_keys WHERE customer_id = ? AND key = ? AND created_at < ?",
+            (customer_id, key, oldest),
+        )
+        row = conn.execute(
+            "SELECT request_hash, response_json FROM idempotency_keys"
+            " WHERE customer_id = ? AND key = ?",
+            (customer_id, key),
+        ).fetchone()
+        if row is not None:
+            if row["request_hash"] != fingerprint:
+                raise IdempotencyConflict("idempotency key already used for a different request")
+            return json.loads(row["response_json"]), True
+        entry_id = _transfer_in_txn(conn, from_account_id, to_account_id, amount, reference, now)
+        result = {
+            "entry_id": entry_id,
+            "to_account_number": get_account(conn, to_account_id).number,
+            "amount_minor": amount.minor,
+            "currency": amount.currency,
+            "from_balance_minor": get_account(conn, from_account_id).balance_minor,
+        }
+        conn.execute(
+            "INSERT INTO idempotency_keys"
+            " (customer_id, key, request_hash, entry_id, response_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (customer_id, key, fingerprint, entry_id, json.dumps(result), timestamp(now)),
+        )
+        return result, False
+
+
+def run_once(
+    conn: sqlite3.Connection, name: str, job: Callable[[sqlite3.Connection], None]
+) -> bool:
+    """Run ``job(conn)`` once per database, as one write transaction with its completion flag.
+
+    Either the job's writes and the ``done`` flag commit together, or neither does, so a job that
+    fails part-way leaves nothing behind and runs again on the next call. A second caller waits
+    for the write lock, then sees the flag and returns False. Returns True when the job ran.
+    """
+
+    def done() -> bool:
+        row = conn.execute("SELECT state FROM app_flags WHERE name = ?", (name,)).fetchone()
+        return row is not None and row["state"] == "done"
+
+    if done():
+        return False
+    with write_txn(conn):
+        if done():
+            return False
+        with nesting_allowed(conn):
+            job(conn)
+        conn.execute(
+            "INSERT INTO app_flags (name, state, set_at) VALUES (?, 'done', ?)"
+            " ON CONFLICT (name) DO UPDATE SET state = 'done', set_at = excluded.set_at",
+            (name, timestamp()),
+        )
+    return True
 
 
 def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date) -> Statement:
@@ -283,8 +398,11 @@ def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date)
     if start > end:
         raise LedgerError("statement start is after its end")
     account = get_account(conn, account_id)
+    try:
+        upper = (end + timedelta(days=1)).isoformat()
+    except OverflowError:
+        raise LedgerError("statement end is out of range") from None
     lower = start.isoformat()
-    upper = (end + timedelta(days=1)).isoformat()
     (opening,) = conn.execute(
         "SELECT COALESCE(SUM(l.amount_minor), 0) FROM journal_lines l"
         " JOIN journal_entries e ON e.id = l.entry_id"

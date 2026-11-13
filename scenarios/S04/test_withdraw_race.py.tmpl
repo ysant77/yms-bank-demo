@@ -48,8 +48,11 @@ def test_{TOKEN}_concurrent_withdrawals_20_threads(tmp_path):
         assert all(o in ("ok", "refused") for o in outcomes), outcomes
 
 
-def test_{TOKEN}_balance_never_negative(tmp_path):
+def test_{TOKEN}_balance_matches_withdrawals(tmp_path):
+    """The balance is 100.00 minus 80.00 per successful withdrawal, and never below 0.00."""
     for run in range(5):
-        setup, account, _ = _race(tmp_path / f"neg{run}.db")
-        assert ledger.get_account(setup, account.id).balance_minor >= 0
+        setup, account, outcomes = _race(tmp_path / f"books{run}.db")
+        balance = ledger.get_account(setup, account.id).balance_minor
+        assert balance == 10_000 - 8_000 * outcomes.count("ok"), outcomes
+        assert balance >= 0
         assert ledger.check_invariants(setup) == []

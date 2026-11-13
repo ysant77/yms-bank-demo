@@ -1,18 +1,25 @@
 diff --git a/src/bank/ledger.py b/src/bank/ledger.py
-index 0c5661f..f0ac5dd 100644
+index 40f5260..300deff 100644
 --- a/src/bank/ledger.py
 +++ b/src/bank/ledger.py
-@@ -249,13 +249,24 @@ def withdraw(
+@@ -15,6 +15,7 @@ from __future__ import annotations
+ import hashlib
+ import json
+ import sqlite3
++import time
+ from collections.abc import Callable
+ from dataclasses import dataclass
+ from datetime import UTC, date, datetime, timedelta
+@@ -252,10 +253,16 @@ def withdraw(
      description: str = "Cash withdrawal",
      at: datetime | None = None,
  ) -> int:
--    with write_txn(conn):
--        account = _require(conn, account_id, amount)
 +    account = _require(conn, account_id, amount)
 +    if account.balance_minor < amount.minor:
 +        raise InsufficientFunds(f"insufficient funds in {account.number}")
-+    conn.execute("BEGIN")
-+    try:
++    time.sleep(0.01)
+     with write_txn(conn):
+-        account = _require(conn, account_id, amount)
 +        conn.execute(
 +            "UPDATE accounts SET balance_minor = ? WHERE id = ?",
 +            (account.balance_minor - amount.minor, account.id),
@@ -21,13 +28,4 @@ index 0c5661f..f0ac5dd 100644
 -        _debit(conn, account, amount.minor)
          _credit(conn, clearing, amount.minor)
          lines = [(account.id, -amount.minor), (clearing, amount.minor)]
--        return _post(conn, "withdrawal", description, amount.currency, lines, at)
-+        entry_id = _post(conn, "withdrawal", description, amount.currency, lines, at)
-+    except BaseException:
-+        conn.execute("ROLLBACK")
-+        raise
-+    conn.execute("COMMIT")
-+    return entry_id
- 
- 
- def transfer(
+         return _post(conn, "withdrawal", description, amount.currency, lines, at)

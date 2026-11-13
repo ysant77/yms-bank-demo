@@ -78,12 +78,52 @@ def applied_versions(conn: sqlite3.Connection) -> list[int]:
     return [row[0] for row in rows]
 
 
-def _run(conn: sqlite3.Connection, script: str, bookkeeping: str, params: tuple) -> None:
-    """Run a migration script and its bookkeeping row in one transaction."""
+def statements(script: str) -> list[str]:
+    """Split a SQL script into complete statements, so each runs inside one transaction."""
+    parts, current = [], ""
+    for line in script.splitlines(keepends=True):
+        current += line
+        if sqlite3.complete_statement(current):
+            if current.strip():
+                parts.append(current.strip())
+            current = ""
+    leftover = [
+        line for line in current.splitlines() if line.strip() and not line.strip().startswith("--")
+    ]
+    if leftover:
+        raise ValueError("migration ends with an incomplete statement")
+    return parts
+
+
+def _run(
+    conn: sqlite3.Connection,
+    version: int,
+    script: str,
+    bookkeeping: str,
+    params: tuple,
+    *,
+    expect_applied: bool,
+) -> bool:
+    """Run one migration and its bookkeeping row in one write transaction.
+
+    The applied state is read again after the write lock is taken, so two workers that start on
+    the same database do not both run a migration. Returns False when another worker got there
+    first.
+    """
+    _ensure_table(conn)
+    conn.execute("BEGIN IMMEDIATE")
     try:
-        conn.executescript(f"BEGIN IMMEDIATE;\n{script}\n")
+        found = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?", (version,)
+        ).fetchone()
+        if bool(found) != expect_applied:
+            conn.execute("ROLLBACK")
+            return False
+        for statement in statements(script):
+            conn.execute(statement)
         conn.execute(bookkeeping, params)
         conn.execute("COMMIT")
+        return True
     except BaseException:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
@@ -99,8 +139,8 @@ def migrate_up(conn: sqlite3.Connection, directory: Path | None = None) -> list[
             continue
         now = datetime.now(UTC).isoformat(timespec="seconds")
         insert = "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)"
-        _run(conn, m.up, insert, (m.version, m.name, now))
-        applied.append(m.version)
+        if _run(conn, m.version, m.up, insert, (m.version, m.name, now), expect_applied=False):
+            applied.append(m.version)
     return applied
 
 
@@ -114,6 +154,6 @@ def migrate_down(conn: sqlite3.Connection, target: int, directory: Path | None =
         if version not in by_version:
             raise ValueError(f"migration {version:04d} is applied but its file is missing")
         delete = "DELETE FROM schema_migrations WHERE version = ?"
-        _run(conn, by_version[version].down, delete, (version,))
-        reverted.append(version)
+        if _run(conn, version, by_version[version].down, delete, (version,), expect_applied=True):
+            reverted.append(version)
     return reverted
