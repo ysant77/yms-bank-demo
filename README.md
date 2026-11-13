@@ -81,16 +81,27 @@ check that the Send button stays visible at 430 px and below.
 uv run pytest -m "bench or not bench" --ci-report=ci-report.json
 ```
 
-The report follows the `aat-ci-report/1` format (`aat` stands for *agentic agile team*, the
+The report follows the `aat-ci-report/2` format (`aat` stands for *agentic agile team*, the
 issue-tracker verifier that reads it): test ids with outcomes and durations, metrics
 recorded with the `record_metric(name, value)` fixture, repeated measurements recorded with
-`record_samples(name, samples)` as `{median, iqr_low, iqr_high, runs}` (the benchmark reports
-`transfers_per_s` this way, from 20 runs), an
+`record_samples(name, samples)` as `{median, iqr_low, iqr_high, min, max, runs}` in the unit of
+the samples (quartiles by linear interpolation, `statistics.quantiles(n=4,
+method="inclusive")`; the benchmark reports `transfers_per_s`, transfers per second, from 20
+rounds after one warm-up round), an
 optional `data_hashes` block from the `record_data_hashes(train, live)` fixture, locked
 dependency versions from `uv.lock`, a sha256 of every file under `.github/workflows/`, head
 and base commits from `CI_HEAD_SHA`/`CI_BASE_SHA` (or `git rev-parse` of `HEAD` and
 `CI_BASE_REF`, default `main`), the SQL operations in each migration, and `audit_vulns` from the
-dependency audit.
+dependency audit. Each metric name is written once per run; a second write fails the test that
+tries it. Version 2 differs from version 1 only in that a metric may be such an object.
+
+**What the benchmark spread means.** The interquartile range is the jitter between rounds inside
+one test process. It does not include the difference between two CI jobs, which can be much
+larger: `main`'s report had `transfers_per_s` 10320.7, and the first run of this format reported a
+median of 23468.75 (IQR 20435.5 to 23617.5) with no change to the ledger. So two numbers from
+different jobs (a pull request against `main`, or two pull requests) cannot be compared with
+this range. A valid comparison measures both versions in the same job, interleaved, or takes the
+noise band from several jobs.
 
 CI (`.github/workflows/ci.yml`, Linux only) has four jobs:
 - `test`: ruff lint and format check, the default tests, a dependency audit with `pip-audit`
