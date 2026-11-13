@@ -981,3 +981,68 @@ def test_an_attempt_pr_title_is_checked(demo_repo, capsys):
     git(demo_repo, "commit", "-q", "-am", "chore: a bad title")
     assert scenario.main(["base", "S98", "--from", "main"]) == 2
     assert "pr_title" in capsys.readouterr().err
+
+
+def test_git_steps_never_prompt(monkeypatch):
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    e = scenario.env()
+    assert e["GIT_TERMINAL_PROMPT"] == "0"
+    assert e["GIT_SSH_COMMAND"] == "ssh -o BatchMode=yes"
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -i key")
+    assert scenario.env()["GIT_SSH_COMMAND"] == "ssh -i key"
+
+
+def test_a_hook_that_reads_input_gets_end_of_file(demo_repo):
+    """stdin is closed for git steps, so a hook that reads input does not wait."""
+    import time
+
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    hook(demo_repo, "pre-commit", "read line; exit 0")
+    began = time.monotonic()
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    assert time.monotonic() - began < 30
+
+
+def test_an_interrupt_during_clean_up_still_writes_the_run_record(demo_repo, monkeypatch):
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+
+    def interrupted_cleanup(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(scenario.shutil, "rmtree", interrupted_cleanup)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(
+            ["attempt", "S98", "v1", "--key", "BANK-9", "--author", "live", "--model", "m-1"]
+        )
+    monkeypatch.undo()
+    records = list((demo_repo / ".git" / "scenario-runs").glob("S98-v1-*.json"))
+    assert len(records) == 1
+    import json
+
+    assert json.loads(records[0].read_text())["model"] == "m-1"
+
+
+def test_a_failed_unregister_names_git_worktree_prune(demo_repo, monkeypatch, capsys):
+    import shutil as sh
+
+    real = scenario.spawn
+
+    def remove_fails(args, cwd):
+        if "remove" in args:
+            sh.rmtree(args[-1], ignore_errors=True)
+            return scenario.subprocess.CompletedProcess(args, 1, "", "locked")
+        return real(args, cwd)
+
+    monkeypatch.setattr(scenario, "spawn", remove_fails)
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert "git worktree prune" in capsys.readouterr().err
+    monkeypatch.undo()
+    git(demo_repo, "worktree", "prune")
+
+
+def test_an_unknown_attempt_key_is_refused(demo_repo, capsys):
+    bad = SPEC.replace('name = "v2"\n', 'name = "v2"\ntwinbranch = "feat/{key_lower}-x"\n')
+    (demo_repo / "scenarios" / "S98.toml").write_text(bad)
+    git(demo_repo, "commit", "-q", "-am", "chore: a typo")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert "unknown keys ['twinbranch']" in capsys.readouterr().err
