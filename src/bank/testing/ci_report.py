@@ -135,9 +135,15 @@ class Collector:
         self.metrics: dict[str, float | int | dict[str, float | int]] = {}
         self.data_hashes: dict[str, str] | None = None
 
+    # Names the plugin writes itself; a test may not set them (for example when audit.json is
+    # missing and the plugin would not write audit_vulns).
+    RESERVED = frozenset({"audit_vulns"})
+
     def _check_name(self, name: str) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("metric name must be a non-empty string")
+        if name in self.RESERVED:
+            raise ValueError(f"metric {name} is written by the report plugin, not by a test")
         if name in self.metrics:
             # Another test could otherwise replace a measured value with any number it likes.
             raise ValueError(f"metric {name} was already recorded in this run; it is written once")
@@ -172,12 +178,13 @@ class Collector:
             low, mid, high = statistics.quantiles(samples, n=4, method="inclusive")
         except OverflowError:
             raise ValueError(f"metric {name}: samples too large to summarise") from None
+        # float() keeps every value a plain JSON number, also for large integer samples.
         summary = {
-            "median": mid,
-            "iqr_low": low,
-            "iqr_high": high,
-            "min": min(samples),
-            "max": max(samples),
+            "median": float(mid),
+            "iqr_low": float(low),
+            "iqr_high": float(high),
+            "min": float(min(samples)),
+            "max": float(max(samples)),
         }
         if not all(math.isfinite(v) for v in summary.values()):
             raise ValueError(f"metric {name}: the summary is not finite (samples too large)")

@@ -97,8 +97,8 @@ tries it. Version 2 differs from version 1 only in that a metric may be such an 
 
 **What the benchmark spread means.** The interquartile range is the jitter between rounds inside
 one test process. It does not include the difference between two CI jobs, which can be much
-larger: `main`'s report had `transfers_per_s` 10320.7, and the first run of this format reported a
-median of 23468.75 (IQR 20435.5 to 23617.5) with no change to the ledger. So two numbers from
+larger: on 13 Nov 2026, `main`'s report had `transfers_per_s` 10320.7, and the first run of this
+format reported a median of 23468.75 (IQR 20435.5 to 23617.5) with no change to the ledger. So two numbers from
 different jobs (a pull request against `main`, or two pull requests) cannot be compared with
 this range. A valid comparison measures both versions in the same job, interleaved, or takes the
 noise band from several jobs.

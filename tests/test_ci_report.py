@@ -292,3 +292,18 @@ def test_cheat(record_samples):
 
 def test_record_samples_fixture_is_available(record_samples):
     assert callable(record_samples)
+
+
+def test_audit_vulns_is_reserved_for_the_plugin():
+    c = Collector()
+    with pytest.raises(ValueError, match="report plugin"):
+        c.record("audit_vulns", 0)
+    with pytest.raises(ValueError, match="report plugin"):
+        c.record_samples("audit_vulns", [0, 0, 0, 0])
+    assert c.metrics == {}
+
+
+def test_large_integer_samples_are_written_as_floats():
+    c = Collector()
+    c.record_samples("rows", [10**20, 10**20, 10**20, 10**20])
+    assert all(isinstance(v, float) for k, v in c.metrics["rows"].items() if k != "runs")
