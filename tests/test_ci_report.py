@@ -96,7 +96,7 @@ def test_report_follows_the_format(project, monkeypatch):
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/ledger-demo")
     report = run(project)
 
-    assert report["schema"] == "aat-ci-report/1"
+    assert report["schema"] == "aat-ci-report/2"
     assert report["repository"] == "owner/ledger-demo"
     assert (report["head_sha"], report["base_sha"]) == ("a" * 40, "b" * 40)
     assert report["generated_at"].endswith("Z")
@@ -193,10 +193,117 @@ def test_model(record_data_hashes):
     )
     report = run(project, "test_model.py")
     assert report["data_hashes"] == {"train": train, "live": live}
-    assert report["schema"] == "aat-ci-report/1"
+    assert report["schema"] == "aat-ci-report/2"
 
 
 @pytest.mark.parametrize("value", ["", "ABC", "a" * 63, None])
 def test_record_data_hashes_rejects_non_digests(value):
     with pytest.raises(ValueError):
         Collector().record_data_hashes(value, "a" * 64)
+
+
+def test_record_samples_keeps_median_iqr_min_max_and_runs():
+    c = Collector()
+    c.record_samples("transfers_per_s", [440.0, 400.0, 420.0, 430.0, 410.0])
+    assert c.metrics["transfers_per_s"] == {
+        "median": 420.0,
+        "iqr_low": 410.0,
+        "iqr_high": 430.0,
+        "min": 400.0,
+        "max": 440.0,
+        "runs": 5,
+    }
+
+
+def test_record_samples_with_an_even_count_interpolates():
+    c = Collector()
+    c.record_samples("t", [1.0, 2.0, 3.0, 4.0])
+    assert c.metrics["t"] == {
+        "median": 2.5,
+        "iqr_low": 1.75,
+        "iqr_high": 3.25,
+        "min": 1.0,
+        "max": 4.0,
+        "runs": 4,
+    }
+
+
+def test_small_values_are_not_rounded_away():
+    c = Collector()
+    c.record_samples("latency_s", [0.0004, 0.0005, 0.0006, 0.0007])
+    c.record("p95_s", 0.00042)
+    assert 0.0005 < c.metrics["latency_s"]["median"] < 0.0006
+    assert c.metrics["p95_s"] == 0.00042
+
+
+@pytest.mark.parametrize(
+    ("samples", "error"),
+    [
+        ([1.0, 2.0, 3.0], ValueError),
+        ([1.0, 2.0, float("nan"), 4.0], ValueError),
+        ([1e308] * 4, ValueError),
+        ([10**400] * 4, ValueError),
+        ("1234", TypeError),
+        ((1.0, 2.0, 3.0, 4.0), TypeError),
+        ([1.0, True, 3.0, 4.0], TypeError),
+    ],
+)
+def test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing(samples, error):
+    c = Collector()
+    c.record("kept", 1.5)
+    with pytest.raises(error):
+        c.record_samples("x", samples)
+    assert c.metrics == {"kept": 1.5}
+
+
+def test_a_metric_is_written_once_per_run():
+    c = Collector()
+    c.record_samples("transfers_per_s", [400.0, 410.0, 420.0, 430.0])
+    before = dict(c.metrics)
+    with pytest.raises(ValueError, match="already recorded"):
+        c.record_samples("transfers_per_s", [99999.0] * 20)
+    with pytest.raises(ValueError, match="already recorded"):
+        c.record("transfers_per_s", 99999.0)
+    assert c.metrics == before
+
+
+def test_a_name_is_checked_before_the_samples():
+    with pytest.raises(ValueError, match="non-empty"):
+        Collector().record_samples("", "not samples")
+
+
+def test_a_rewrite_by_another_test_fails_the_run(project):
+    project.makepyfile(
+        test_cheat="""
+def test_real(record_samples):
+    record_samples("transfers_per_s", [400.0, 410.0, 420.0, 430.0])
+
+def test_cheat(record_samples):
+    record_samples("transfers_per_s", [99999.0] * 20)
+"""
+    )
+    result = project.runpytest(
+        "-p", "bank.testing.ci_report", "--ci-report=out.json", "test_cheat.py"
+    )
+    result.assert_outcomes(passed=1, failed=1)
+    report = json.loads((project.path / "out.json").read_text())
+    assert report["metrics"]["transfers_per_s"]["median"] == 415.0
+
+
+def test_record_samples_fixture_is_available(record_samples):
+    assert callable(record_samples)
+
+
+def test_audit_vulns_is_reserved_for_the_plugin():
+    c = Collector()
+    with pytest.raises(ValueError, match="report plugin"):
+        c.record("audit_vulns", 0)
+    with pytest.raises(ValueError, match="report plugin"):
+        c.record_samples("audit_vulns", [0, 0, 0, 0])
+    assert c.metrics == {}
+
+
+def test_large_integer_samples_are_written_as_floats():
+    c = Collector()
+    c.record_samples("rows", [10**20, 10**20, 10**20, 10**20])
+    assert all(isinstance(v, float) for k, v in c.metrics["rows"].items() if k != "runs")
