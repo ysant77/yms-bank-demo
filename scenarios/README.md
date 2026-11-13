@@ -33,11 +33,14 @@ repository; your checkout (working tree, index, HEAD, ignored and untracked file
 changed. Git's location variables (`GIT_DIR`, `GIT_INDEX_FILE` and similar) from the caller's
 environment are ignored. Only one run per branch at a time: a lock file under the git common
 directory (with the run's process id) makes a second run refuse; a lock whose process is gone is
-taken over. A leftover temporary worktree from an interrupted run is named with the exact
-`git worktree remove --force <path>` command.
+taken over. A leftover temporary worktree of this script (under a `scenario-run-*` folder in the
+system temp directory) is removed if its folder is gone, or named with the exact
+`git worktree remove --force <path>` command; no other worktree is touched.
 
-A run is *finished* when its commit (and its push, if asked) succeeded; a finished run is never
-undone, even if it is interrupted while cleaning up. If an unfinished run fails or is interrupted
+A run is *finished* when its commit (and its push, if asked) succeeded, or when the remote already
+holds this run's commit; a finished run is never undone, even if it is interrupted while cleaning
+up. Ctrl-C, SIGTERM and SIGHUP are held for the moment a switch or a commit and its record are
+taken, and delivered right after, so the record of what the run did always exists. If an unfinished run fails or is interrupted
 (Ctrl-C, SIGTERM or SIGHUP), the temporary worktree is removed and the branch is rolled back only
 where this run recorded what it did, with compare-and-swap (`git update-ref`): a branch that this
 run's own `git switch -c` created is deleted only if it still points where this run left it; an
@@ -46,3 +49,14 @@ points at this run's own commit. If the branch has moved in the meantime (anothe
 committed), it is left alone and the script prints `rollback incomplete: ...`.
 Every refusal, a missing scenario file or a failed git command exits with code 2 and a line that
 starts with `refused:`.
+
+**Known limits.**
+- After `kill -9` (or a power loss) an empty `scenario-run-*` folder in the temp directory and a
+  half-made base or twin branch can remain. Remove the branch with
+  `git branch -D <branch>` after checking it holds no work you want, and the folder by hand.
+- Run the script through `uv run python scripts/scenario.py ...`: a bare `python` in a fresh clone
+  can create an empty `.venv` when it starts `uv` for ruff.
+- A lock whose process id has been reused by an unrelated process looks alive; remove the file
+  under `.git/scenario-locks/` by hand.
+- The run stops on SIGHUP even when started with `nohup`, because the script installs its own
+  handler.

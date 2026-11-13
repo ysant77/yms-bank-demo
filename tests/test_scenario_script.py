@@ -700,13 +700,15 @@ def test_sigterm_rolls_back_like_ctrl_c(demo_repo, monkeypatch):
     assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def test_a_leftover_temporary_worktree_names_the_command(demo_repo, tmp_path, capsys):
+def test_a_leftover_temporary_worktree_names_the_command(demo_repo, capsys):
+    import tempfile
+
     assert scenario.main(["base", "S98", "--from", "main"]) == 0
     assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 0
-    left = tmp_path / "scenario-run-old" / "tree"
+    left = Path(tempfile.mkdtemp(prefix="scenario-run-")) / "tree"
     git(demo_repo, "worktree", "add", "-q", str(left), "fix/bank-9-demo")
     assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 2
-    assert f"git worktree remove --force {left}" in capsys.readouterr().err
+    assert f"git worktree remove --force {left.resolve()}" in capsys.readouterr().err
 
 
 def test_an_interrupt_after_a_finished_run_keeps_its_commit(demo_repo, monkeypatch):
@@ -738,3 +740,122 @@ def test_add_test_never_overwrites_a_tracked_file_with_other_content(demo_repo, 
     git(demo_repo, "commit", "-q", "-am", "chore: change the template")
     assert scenario.main(["attempt", "S98", "v2", "--key", "BANK-9"]) == 2
     assert "exists with other content" in capsys.readouterr().err
+
+
+def test_a_users_worktree_with_a_missing_folder_is_not_touched(demo_repo, tmp_path):
+    import shutil
+    import tempfile
+
+    mine = tmp_path / "my-worktree"
+    git(demo_repo, "worktree", "add", "-q", "--detach", str(mine), "main")
+    shutil.rmtree(mine)  # for example on an unmounted disk
+    ours = Path(tempfile.mkdtemp(prefix="scenario-run-")) / "tree"
+    git(demo_repo, "worktree", "add", "-q", "--detach", str(ours), "main")
+    shutil.rmtree(ours.parent)  # a leftover of this script whose folder is gone
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    listing = git(demo_repo, "worktree", "list", "--porcelain")
+    assert str(mine) in listing
+    assert str(ours) not in listing
+
+
+def hook(repo, name, body):
+    path = repo / ".git" / "hooks" / name
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(0o755)
+    return path
+
+
+@pytest.mark.parametrize("signame", ["SIGINT", "SIGTERM"], ids=["int", "term"])
+def test_a_signal_during_the_switch_still_rolls_back(demo_repo, monkeypatch, signame):
+    """The signal is sent from post-checkout, inside the switch: it is held until the record of
+    the switch exists, then rolls the created branch back."""
+    import signal
+
+    monkeypatch.setenv("SCENARIO_TEST_PID", str(os.getpid()))
+    monkeypatch.setenv("SCENARIO_TEST_SIG", str(int(getattr(signal, signame))))
+    # Only the switch inside the run: branch checkout flag 1 and a previous HEAD that exists.
+    body = (
+        'case "$1" in 0000000*) exit 0;; esac\n'
+        '[ "$3" = 1 ] && [ -n "$SCENARIO_TEST_PID" ] && '
+        'kill -"$SCENARIO_TEST_SIG" "$SCENARIO_TEST_PID"\nexit 0'
+    )
+    hook(demo_repo, "post-checkout", body)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main"])
+    (demo_repo / ".git" / "hooks" / "post-checkout").unlink()
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+    assert git(demo_repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_signal_during_the_commit_still_rolls_back(demo_repo, monkeypatch):
+    import signal
+
+    monkeypatch.setenv("SCENARIO_TEST_PID", str(os.getpid()))
+    hook(
+        demo_repo,
+        "post-commit",
+        f'[ -n "$SCENARIO_TEST_PID" ] && kill -{int(signal.SIGTERM)} "$SCENARIO_TEST_PID"\nexit 0',
+    )  # noqa: E501
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main"])
+    (demo_repo / ".git" / "hooks" / "post-commit").unlink()
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+
+
+def test_an_interrupt_after_the_remote_accepted_the_push_keeps_the_run(
+    demo_repo, tmp_path, monkeypatch
+):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(demo_repo, "remote", "add", "origin", str(remote))
+    real = scenario.push
+
+    def push_then_interrupt(branch):
+        real(branch)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(scenario, "push", push_then_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main", "--push"])
+    local = git(demo_repo, "rev-parse", "refs/heads/test/s98-seed-demo").strip()
+    assert git(remote, "rev-parse", "refs/heads/test/s98-seed-demo").strip() == local
+
+
+def test_a_signal_while_the_switch_is_recorded_is_held(demo_repo, monkeypatch):
+    """The signal lands exactly while the record of the switch is read."""
+    import signal
+
+    real = scenario.git
+    sent = []
+
+    def signal_at_record(*args):
+        if args[:1] == ("symbolic-ref",) and not sent:
+            sent.append(1)
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real(*args)
+
+    monkeypatch.setattr(scenario, "git", signal_at_record)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main"])
+    assert sent
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""
+
+
+def test_a_signal_while_the_commit_is_recorded_is_held(demo_repo, monkeypatch):
+    import signal
+
+    real = scenario.run
+    sent = []
+
+    def signal_at_record(*args, **kwargs):
+        if args == ("git", "rev-parse", "HEAD") and kwargs.get("capture") and scenario.TREE:
+            if not sent and "seed" in real("git", "log", "-1", "--format=%s", capture=True):
+                sent.append(1)
+                os.kill(os.getpid(), signal.SIGTERM)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(scenario, "run", signal_at_record)
+    with pytest.raises(KeyboardInterrupt):
+        scenario.main(["base", "S98", "--from", "main"])
+    assert sent
+    assert git(demo_repo, "branch", "--list", "test/s98-seed-demo") == ""

@@ -22,6 +22,8 @@ checkout is never changed. One run per branch (a lock under the git common dir).
 (commit, and push if asked) is never undone. An unfinished run that fails or is interrupted
 (Ctrl-C, SIGTERM, SIGHUP) removes its worktree and rolls the branch back only where it recorded
 what it did, with compare-and-swap; a branch that moved meanwhile is left alone, with a message.
+Signals are held while a switch or commit and its record are taken. Known limits: see
+scenarios/README.md.
 
 Usage:
   uv run python scripts/scenario.py base S01 [--from origin/main] [--push]
@@ -359,6 +361,30 @@ def pr_body(spec: dict, key: str, twin: str, author: str) -> str:
     )
 
 
+STOP_SIGNALS = {signal.SIGINT, signal.SIGTERM, signal.SIGHUP}
+
+
+@contextmanager
+def signals_deferred() -> Iterator[None]:
+    """Hold Ctrl-C, SIGTERM and SIGHUP while a git step and the record of what it did are taken
+    together. A signal that arrives meanwhile is only noted, and raised as KeyboardInterrupt right
+    after, when the record exists. Done with Python handlers (they always run in the main
+    thread), not a thread signal mask, which other threads could bypass."""
+    pending: list[int] = []
+
+    def hold(signum: int, _frame: object) -> None:
+        pending.append(signum)
+
+    previous = {s: signal.signal(s, hold) for s in STOP_SIGNALS}
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+        if pending:
+            raise KeyboardInterrupt(f"signal {pending[0]}")
+
+
 def commit(paths: list[str], message: list[str], state: RunState | None = None) -> str:
     """Format, stage and commit only the given paths; record the new commit in ``state``."""
     for path in paths:
@@ -375,9 +401,10 @@ def commit(paths: list[str], message: list[str], state: RunState | None = None) 
     args = ["git", "commit", "-q"]
     for part in message:
         args += ["-m", part]
-    run(*args)
-    if state is not None:
-        state.made = run("git", "rev-parse", "HEAD", capture=True)
+    with signals_deferred():
+        run(*args)
+        if state is not None:
+            state.made = run("git", "rev-parse", "HEAD", capture=True)
     left = run("git", "status", "--porcelain", capture=True)
     if left:
         raise ScenarioError(f"changes left out of the commit: {left.splitlines()[:5]}")
@@ -476,15 +503,33 @@ def branch_lock(branch: str) -> Iterator[None]:
         path.unlink(missing_ok=True)
 
 
+def own_temp_tree(path: str) -> bool:
+    """A worktree this script made: <system temp dir>/scenario-run-*/tree."""
+    candidate = Path(path)
+    return (
+        candidate.name == "tree"
+        and candidate.parent.name.startswith("scenario-run-")
+        and candidate.parent.parent.resolve() == Path(tempfile.gettempdir()).resolve()
+    )
+
+
 def check_leftovers(branch: str) -> None:
-    """A leftover temporary worktree from an interrupted run would block the branch: prune the
-    ones that are gone, and name the exact command for one that still exists."""
-    subprocess.run(["git", "worktree", "prune"], cwd=ROOT, capture_output=True, env=env())
+    """A leftover temporary worktree of this script (under a scenario-run-* temp folder): one
+    whose folder is gone is removed by its path; one that still exists and holds the branch is
+    named with the exact command. Other worktrees are never touched."""
     listing = run("git", "worktree", "list", "--porcelain", capture=True, cwd=ROOT)
     for block in listing.split("\n\n"):
         lines = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
         path = lines.get("worktree", "")
-        if lines.get("branch") == f"refs/heads/{branch}" and "scenario-run-" in path:
+        if not own_temp_tree(path):
+            continue
+        if not Path(path).exists():
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", path],
+                cwd=ROOT, capture_output=True, env=env(),
+            )  # fmt: skip
+            continue
+        if lines.get("branch") == f"refs/heads/{branch}":
             raise ScenarioError(
                 f"a leftover temporary worktree holds {branch}; remove it with: "
                 f"git worktree remove --force {path}"
@@ -507,7 +552,6 @@ def temp_tree(start: str) -> Iterator[Path]:
             ["git", "worktree", "remove", "--force", str(tree)],
             cwd=ROOT, text=True, capture_output=True, env=env(),
         )  # fmt: skip
-        subprocess.run(["git", "worktree", "prune"], cwd=ROOT, capture_output=True, env=env())
         shutil.rmtree(holder, ignore_errors=True)
         if removed.returncode != 0 and tree.exists():
             print(
@@ -523,19 +567,20 @@ def branch_tip(branch: str) -> str | None:
 def switch_into(state: RunState, start_new: bool) -> None:
     """Create or check out the branch in the temporary tree and record that this run did it.
 
-    The record is taken from the private tree itself (HEAD points at the branch), in a finally
-    block, so an interrupt that lands just after the switch still leaves a correct record.
+    Signals are held while the switch runs and the record is taken (from the private tree's
+    HEAD), so an interrupt at that point is delivered only once the record exists.
     """
-    try:
-        if start_new:
-            run("git", "switch", "-q", "--no-track", "-c", state.branch)
-        else:
-            run("git", "switch", "-q", state.branch)  # refused if checked out elsewhere
-    finally:
-        head = git("symbolic-ref", "-q", "HEAD").stdout.strip()
-        if head == f"refs/heads/{state.branch}":
-            state.created = start_new
-            state.switched_tip = git("rev-parse", "HEAD").stdout.strip()
+    with signals_deferred():
+        try:
+            if start_new:
+                run("git", "switch", "-q", "--no-track", "-c", state.branch)
+            else:
+                run("git", "switch", "-q", state.branch)  # refused if checked out elsewhere
+        finally:
+            head = git("symbolic-ref", "-q", "HEAD").stdout.strip()
+            if head == f"refs/heads/{state.branch}":
+                state.created = start_new
+                state.switched_tip = git("rev-parse", "HEAD").stdout.strip()
 
 
 def cmd_base(args: argparse.Namespace) -> None:
@@ -563,6 +608,8 @@ def cmd_base(args: argparse.Namespace) -> None:
                     push(branch)
                 state.finished = True
         except BaseException:
+            if args.push and state.made and remote_has(branch, state.made):
+                state.finished = True  # the remote accepted the push: the run is done
             undo(state)
             raise
     print(
@@ -592,6 +639,12 @@ def safe_path_parent(relative: str) -> Path:
     if any(parts[: len(denied)] == denied for denied in DENIED_DIRS):
         raise ScenarioError(f"path is in a protected folder: {relative!r}")
     return tree / relative
+
+
+def remote_has(branch: str, sha: str) -> bool:
+    """Whether origin's branch points at ``sha`` (the push completed before an interrupt)."""
+    found = git("ls-remote", "--exit-code", "origin", f"refs/heads/{branch}")
+    return found.returncode == 0 and found.stdout.split()[:1] == [sha]
 
 
 def push(branch: str) -> None:
@@ -681,6 +734,8 @@ def cmd_attempt(args: argparse.Namespace) -> None:
                     push(branch)
                 state.finished = True
         except BaseException:
+            if args.push and state.made and remote_has(branch, state.made):
+                state.finished = True  # the remote accepted the push: the run is done
             undo(state)
             raise
     record = {
