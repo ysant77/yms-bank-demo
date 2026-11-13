@@ -5,6 +5,10 @@ branch, the twin branch, and one or more attempts. `scripts/scenario.py` builds 
 templates use `{KEY}` (for example `BANK-3`) and `{TOKEN}` (`BANK3`), so test names carry the
 Jira issue key and the verifier can match them to acceptance criteria.
 
+An attempt may set its own `twin`, `twin_branch` and `pr_title`. Two twins can then open two pull
+requests on one ticket (S32: Raj and Kai fix the same race); every branch rule below applies to
+each attempt's branch, and both start from the base branch.
+
 Every attempt is labelled in its commit body and pull request body as `scripted` (a change
 written in advance) or `live` (written during the run). Commit and pull request text never
 name a tool or model; for a live attempt the model is recorded only in the untracked run record

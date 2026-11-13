@@ -936,3 +936,48 @@ def test_a_push_finished_before_an_interrupt_sets_upstream_and_writes_the_record
     assert git(demo_repo, "config", f"branch.{branch}.merge").strip() == f"refs/heads/{branch}"
     records = list((demo_repo / ".git" / "scenario-runs").glob("S98-v1-*.json"))
     assert len(records) == 1
+
+
+KAI = """
+[[attempts]]
+name = "v3"
+twin = "Kai"
+twin_branch = "feat/{key_lower}-demo-kai"
+pr_title = "{KEY}: another fix for the demo defect"
+commit = "fix(demo): restore the demo text another way"
+claim = "ready"
+steps = [ { restore = "notes.txt" } ]
+"""
+
+
+def test_two_twins_get_two_branches_for_one_ticket(demo_repo):
+    (demo_repo / "scenarios" / "S98.toml").write_text(SPEC + KAI)
+    git(demo_repo, "commit", "-q", "-am", "chore: a second twin")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v1", "--key", "BANK-9"]) == 0
+    assert scenario.main(["attempt", "S98", "v3", "--key", "BANK-9"]) == 0
+    raj = "fix/bank-9-demo"
+    kai = "feat/bank-9-demo-kai"
+    base = git(demo_repo, "rev-parse", "test/s98-seed-demo").strip()
+    for branch in (raj, kai):
+        assert git(demo_repo, "merge-base", branch, "test/s98-seed-demo").strip() == base
+    assert "Twin change: Kai, scripted." in git(demo_repo, "log", "-1", "--format=%B", kai)
+    assert "Twin change: Raj, scripted." in git(demo_repo, "log", "-1", "--format=%B", raj)
+    assert git(demo_repo, "rev-parse", raj) != git(demo_repo, "rev-parse", kai)
+
+
+def test_an_attempt_branch_must_still_name_the_key(demo_repo, capsys):
+    bad = KAI.replace("feat/{key_lower}-demo-kai", "feat/demo-kai")
+    (demo_repo / "scenarios" / "S98.toml").write_text(SPEC + bad)
+    git(demo_repo, "commit", "-q", "-am", "chore: a branch without the key")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 0
+    assert scenario.main(["attempt", "S98", "v3", "--key", "BANK-9"]) == 2
+    assert "must contain the issue key" in capsys.readouterr().err
+
+
+def test_an_attempt_pr_title_is_checked(demo_repo, capsys):
+    bad = KAI.replace("{KEY}: another fix for the demo defect", "another fix")
+    (demo_repo / "scenarios" / "S98.toml").write_text(SPEC + bad)
+    git(demo_repo, "commit", "-q", "-am", "chore: a bad title")
+    assert scenario.main(["base", "S98", "--from", "main"]) == 2
+    assert "pr_title" in capsys.readouterr().err

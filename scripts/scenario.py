@@ -206,6 +206,11 @@ def load(scenario: str) -> dict:
             raise ScenarioError(f"attempt {attempt['name']}: claim is malformed")
         if "twin" in attempt:
             check_text({"twin": attempt["twin"]}, "twin")
+        # Two twins on one ticket (S32): an attempt may have its own branch and PR title.
+        if "twin_branch" in attempt and not isinstance(attempt["twin_branch"], str):
+            raise ScenarioError(f"attempt {attempt['name']}: twin_branch must be a string")
+        if "pr_title" in attempt:
+            check_text({"pr_title": attempt["pr_title"]}, "pr_title")
     return spec
 
 
@@ -320,7 +325,7 @@ def step_paths(step: dict, values: dict[str, str]) -> list[str]:
 def validate_attempt(spec: dict, attempt: dict, values: dict[str, str]) -> str:
     """Check every branch and path of an attempt before git is touched. Returns the branch."""
     check_branch(spec["base_branch"], "base")
-    branch = check_branch(fill(spec["twin_branch"], values), "twin")
+    branch = check_branch(fill(attempt.get("twin_branch", spec["twin_branch"]), values), "twin")
     if not re.search(rf"(^|[/-]){re.escape(values['key_lower'])}($|-)", branch):
         raise ScenarioError(f"twin branch {branch!r} must contain the issue key {values['KEY']}")
     for step in attempt["steps"]:
@@ -831,7 +836,7 @@ def cmd_attempt(args: argparse.Namespace) -> None:
             "--head",
             branch,
             "--title",
-            fill(spec["pr_title"], values),
+            fill(attempt.get("pr_title", spec["pr_title"]), values),
             "--body",
             pr_body(spec, args.key, twin, author),
         )
