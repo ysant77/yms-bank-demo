@@ -72,6 +72,7 @@ COMMIT_RE = re.compile(
     r"^(feat|fix|test|refactor|perf|docs|chore)(\([a-z0-9-]+\))?: [\w ,.:;()'\"/{}-]{3,90}$"
 )
 ATTEMPT_RE = re.compile(r"^v\d{1,2}$")
+ATTEMPT_KEYS = frozenset({"name", "commit", "claim", "steps", "twin", "twin_branch", "pr_title"})
 # A guard, not a guarantee: attribution phrases and a short list of unambiguous AI product
 # names, checked in every scenario field and template that can reach a commit, branch or PR.
 TOOL_NAMES_RE = re.compile(
@@ -106,7 +107,35 @@ def env() -> dict[str, str]:
     """Pathspec magic such as ":/" is never interpreted in a path the script passes to git, and
     git's location variables from the caller's environment are dropped."""
     clean = {k: v for k, v in os.environ.items() if k not in GIT_LOCATION_VARS}
-    return {**clean, "GIT_LITERAL_PATHSPECS": "1"}
+    # Git steps run in their own process group, so a prompt on the terminal would stop them with
+    # SIGTTIN and the run would wait for ever. Credentials must be non-interactive: git may not
+    # prompt, and ssh runs in batch mode unless the caller set its own ssh command.
+    extra = {"GIT_LITERAL_PATHSPECS": "1", "GIT_TERMINAL_PROMPT": "0"}
+    ssh = batch_ssh_command(clean)
+    if ssh:
+        extra["GIT_SSH_COMMAND"] = ssh
+    return {**clean, **extra}
+
+
+_CORE_SSH: dict[Path, str] = {}
+
+
+def batch_ssh_command(clean: dict[str, str]) -> str | None:
+    """The ssh command for git steps, in batch mode, without dropping the user's own setting.
+    GIT_SSH_COMMAND outranks core.sshCommand and GIT_SSH, so it is set only when it keeps them:
+    - the caller's GIT_SSH_COMMAND or GIT_SSH: kept as it is (None);
+    - core.sshCommand in the repository: that command with " -o BatchMode=yes" added;
+    - neither: "ssh -o BatchMode=yes"."""
+    if clean.get("GIT_SSH_COMMAND") or clean.get("GIT_SSH"):
+        return None
+    if ROOT not in _CORE_SSH:
+        found = subprocess.run(
+            ["git", "config", "--get", "core.sshCommand"],
+            cwd=ROOT, text=True, capture_output=True, env=clean,
+        )  # fmt: skip
+        _CORE_SSH[ROOT] = found.stdout.strip() if found.returncode == 0 else ""
+    configured = _CORE_SSH[ROOT]
+    return f"{configured} -o BatchMode=yes" if configured else "ssh -o BatchMode=yes"
 
 
 def here() -> Path:
@@ -129,7 +158,7 @@ def spawn(args: list[str] | tuple[str, ...], cwd: Path) -> subprocess.CompletedP
     global CHILD
     proc = subprocess.Popen(
         args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env(),
-        process_group=0,
+        stdin=subprocess.DEVNULL, process_group=0,
     )  # fmt: skip
     CHILD = proc
     try:
@@ -198,6 +227,10 @@ def load(scenario: str) -> dict:
     if spec["id"] != scenario:
         raise ScenarioError(f"scenarios/{scenario}.toml has id {spec['id']!r}")
     for attempt in attempts:
+        # A typo such as "twinbranch" would otherwise send this twin's commit to the default branch.
+        unknown = sorted(set(attempt) - ATTEMPT_KEYS)
+        if unknown:
+            raise ScenarioError(f"attempt {attempt.get('name')!r}: unknown keys {unknown}")
         if not ATTEMPT_RE.fullmatch(str(attempt.get("name", ""))):
             raise ScenarioError(f"attempt name must look like v1: {attempt.get('name')!r}")
         if not COMMIT_RE.fullmatch(str(attempt.get("commit", ""))):
@@ -625,6 +658,13 @@ def temp_tree(start: str) -> Iterator[Path]:
                     f"run: git worktree remove --force {tree}; rm -rf {holder}",
                     file=sys.stderr,
                 )
+            elif removed.returncode != 0:
+                # The folder is gone but git may still list the worktree.
+                print(
+                    f"clean-up incomplete: git could not unregister the temporary worktree {tree}; "
+                    "run: git worktree prune",
+                    file=sys.stderr,
+                )
 
 
 def branch_tip(branch: str) -> str | None:
@@ -813,11 +853,14 @@ def cmd_attempt(args: argparse.Namespace) -> None:
                     push(branch)
                 state.finished = True
         except BaseException:
-            if args.push and pushed_before_interrupt(branch, state):
-                # The run is done; its record is written before the interrupt goes on.
+            if args.push and not state.finished:
+                pushed_before_interrupt(branch, state)
+            if state.finished and state.made:
+                # The run is done (an interrupt during clean-up, or after the remote accepted the
+                # push); its record, with a live attempt's model name, is written before it goes on.
                 done = run_record(spec, args, twin, author, branch, state.made, attempt)
                 path = write_run_record(done)
-                print(f"interrupted after the push of {branch} completed; run record {path}")
+                print(f"interrupted after attempt {args.attempt} finished; run record {path}")
             undo(state)
             raise
     record = run_record(spec, args, twin, author, branch, sha, attempt)
