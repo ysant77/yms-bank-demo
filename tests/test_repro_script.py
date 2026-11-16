@@ -237,3 +237,37 @@ def test_only_test_modules_are_copied(name):
     assert repro.test_files([f"tests/{name}"]) == (
         ["tests/test_a.py"] if name == "test_a.py" else []
     )
+
+
+def test_base_test_ids_of_renamed_and_removed_test_files_are_recorded(tmp_path):
+    # A PR that renames a test file and drops one of its tests: the base side keeps the old ids,
+    # so the verifier can see the dropped test (benchmark case I10).
+    keep = "def test_keep():\n    assert True\n\n\ndef test_guard():\n    assert True\n"
+    root, base, head = _repo(
+        tmp_path,
+        dict(BASE, **{"tests/test_keep.py": keep}),
+        {
+            "tests/test_keep.py": None,
+            "tests/test_kept.py": "def test_keep():\n    assert True\n",
+            "tests/test_old.py": None,
+        },
+    )
+    changed = repro.changed_paths(root, base, head)
+    assert changed["base_side"] == ["tests/test_keep.py", "tests/test_old.py"]
+    out = tmp_path / "ci-report.json"
+    out.write_text(
+        json.dumps(
+            {
+                "head_sha": head,
+                "tests": [{"id": "tests/test_kept.py::test_keep", "outcome": "passed"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert repro.main(["--base", base, "--head", head, "--head-report", str(out)], root=root) == 0
+    block = json.loads(out.read_text(encoding="utf-8"))["repro"]
+    assert block["base_test_ids"] == [
+        "tests/test_keep.py::test_guard",
+        "tests/test_keep.py::test_keep",
+        "tests/test_old.py::test_old",
+    ]

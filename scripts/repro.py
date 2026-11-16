@@ -12,7 +12,9 @@
    block into the head report as ``repro``, with the full-suite result of the head run.
 
 The block also records ``head_sha``, the base run (``rc``, ``collected``, ``report``), the
-changed pytest support and config files (``changed_support``) and the removed test files. The
+changed pytest support and config files (``changed_support``), the removed test files, and
+the test ids that the base commit has in every test module the PR changes, renames or removes
+(``base_test_ids``), so a dropped test is visible even when git reads the change as a rename. The
 step fails (exit 1) when there are test files but no base report, or when the head report is for
 another commit. The script never decides anything: the verifier reads the block.
 
@@ -69,11 +71,14 @@ def test_files(changed: list[str]) -> list[str]:
 
 
 def changed_paths(root: Path, base_sha: str, head_sha: str) -> dict[str, list[str]]:
-    """Test modules to copy, test modules removed, and changed support files."""
+    """Test modules to copy, test modules removed, changed support files, and the base-side paths
+    of every test module the PR changes, renames or removes."""
     out = git("diff", "--name-status", "-M", f"{base_sha}...{head_sha}", cwd=root)
-    tests, removed, support = set(), set(), set()
+    tests, removed, support, base_side = set(), set(), set(), set()
     for line in out.splitlines():
         status, *paths = line.split("\t")
+        if not status.startswith("A") and is_test_module(paths[0]):
+            base_side.add(paths[0])
         if status.startswith("D"):
             if is_test_module(paths[0]):
                 removed.add(paths[0])
@@ -82,7 +87,12 @@ def changed_paths(root: Path, base_sha: str, head_sha: str) -> dict[str, list[st
         if status.startswith("R") and is_test_module(paths[0]) and not is_test_module(paths[-1]):
             removed.add(paths[0])
         support.update(p for p in paths if is_support(p))
-    return {"tests": sorted(tests), "removed_tests": sorted(removed), "support": sorted(support)}
+    return {
+        "tests": sorted(tests),
+        "removed_tests": sorted(removed),
+        "support": sorted(support),
+        "base_side": sorted(base_side),
+    }
 
 
 def build_block(
@@ -95,6 +105,7 @@ def build_block(
     base_run: dict | None = None,
     support: list[str] | None = None,
     removed: list[str] | None = None,
+    base_test_ids: list[str] | None = None,
 ) -> dict:
     base_tests = {t["id"]: t for t in base.get("tests", [])}
     broken = {e["id"]: e.get("exc_type") for e in base.get("collect_errors", [])}
@@ -118,6 +129,7 @@ def build_block(
         "base_run": base_run,
         "changed_support": support or [],
         "removed_test_files": removed or [],
+        "base_test_ids": base_test_ids or [],
         "tests": rows,
         "full_suite": {
             "outcome": "failed" if failed else "passed",
@@ -125,6 +137,30 @@ def build_block(
             "failed": failed,
         },
     }
+
+
+def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> list[str]:
+    """Test ids that the base commit has in the given test modules (pytest --collect-only)."""
+    if not paths:
+        return []
+    work = Path(tempfile.mkdtemp())
+    tree = work / root.name
+    try:
+        git("clone", "--quiet", "--shared", "--no-checkout", str(root), str(tree), cwd=work)
+        git("checkout", "--quiet", "--detach", base_sha, cwd=tree)
+        env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
+        env.update(PYTHONPATH="src")
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", *paths],
+            cwd=tree,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return sorted({line.strip() for line in proc.stdout.splitlines() if "::" in line})
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def run_on_base(root: Path, base_sha: str, head_sha: str, files: list[str]) -> tuple[dict, dict]:
@@ -194,6 +230,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         base_run=run,
         support=changed["support"],
         removed=changed["removed_tests"],
+        base_test_ids=collect_base_ids(root, base_sha, changed["base_side"]),
     )
     args.head_report.write_text(
         json.dumps(head, indent=2, allow_nan=False) + "\n", encoding="utf-8"
