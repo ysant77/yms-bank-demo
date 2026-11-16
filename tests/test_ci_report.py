@@ -307,3 +307,47 @@ def test_large_integer_samples_are_written_as_floats():
     c = Collector()
     c.record_samples("rows", [10**20, 10**20, 10**20, 10**20])
     assert all(isinstance(v, float) for k, v in c.metrics["rows"].items() if k != "runs")
+
+
+# Definition of done, D-repro: the report names the exception type of each failure, and a
+# collection error (a test file that cannot import) is reported with its type.
+REPRO_TESTS = """
+import pytest
+
+def test_assert():
+    assert 1 == 2
+
+def test_attr():
+    None.missing
+
+@pytest.fixture
+def broken():
+    raise RuntimeError("setup fails")
+
+def test_setup(broken):
+    pass
+
+def test_ok():
+    pass
+"""
+
+
+def test_failures_carry_the_exception_type(pytester):
+    pytester.makeini("[pytest]\n")
+    pytester.makepyfile(test_repro=REPRO_TESTS, test_cannot_import="import not_a_module\n")
+    path = pytester.path / "report.json"
+    # The repro run keeps going past a file that cannot import, as scripts/repro.py does.
+    pytester.runpytest(
+        "-p", "bank.testing.ci_report", f"--ci-report={path}", "--continue-on-collection-errors"
+    )  # fmt: skip
+    report = json.loads(path.read_text())
+    types = {t["id"].split("::")[-1]: t.get("exc_type") for t in report["tests"]}
+    assert types == {
+        "test_assert": "AssertionError",
+        "test_attr": "AttributeError",
+        "test_setup": "RuntimeError",
+        "test_ok": None,
+    }
+    assert report["collect_errors"] == [
+        {"id": "test_cannot_import.py", "exc_type": "ModuleNotFoundError"}
+    ]

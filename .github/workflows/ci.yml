@@ -15,6 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history: the repro step checks out the base commit of the pull request.
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - run: uv sync --locked --extra fraud
@@ -35,7 +37,19 @@ jobs:
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           CI_AUDIT_JSON: audit.json
+          # The base run in scripts/repro.py uses the same value, so a test cannot tell the two
+          # runs apart by it.
+          PYTHONPATH: src
         run: uv run pytest -q -m "bench or not bench" --ci-report=ci-report.json
+      # Definition of done, D-repro: the pull request's test files run on the base commit, and
+      # the report gets a repro block (base and head outcome of each test). Code decides nothing
+      # here; the verifier reads the block.
+      - name: Run the pull request's tests on the base commit
+        if: ${{ github.event_name == 'pull_request' && !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: uv run python scripts/repro.py --base "$BASE_SHA" --head "$HEAD_SHA" --head-report ci-report.json
       - name: Upload CI report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
