@@ -12,7 +12,10 @@ differs from version 1 only in that a metric value may be such an object. Each m
 written once per run; a second write is refused. Model tests can record the sha256 of their
 training and live data through the ``record_data_hashes`` fixture, which adds an optional
 ``data_hashes`` block. Head and base commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``,
-else from ``git rev-parse`` (``HEAD`` and ``CI_BASE_REF``, default ``main``).
+else from ``git rev-parse`` (``HEAD`` and ``CI_BASE_REF``, default ``main``). A failed or broken
+test has ``exc_type``, the name of its exception class, and a test file that cannot be collected
+is listed in ``collect_errors`` with its exception type. ``scripts/repro.py`` uses both to tell
+"fails by an assertion" from "cannot run" on the base commit.
 """
 
 from __future__ import annotations
@@ -129,9 +132,15 @@ def audit_vulnerabilities(path: str | None) -> int | None:
     return sum(len(dep.get("vulns", [])) for dep in data.get("dependencies", []))
 
 
+# The last "E   SomeError: ..." line of a collection error names the exception class.
+COLLECT_EXC = re.compile(r"^E\s+([A-Za-z_][\w.]*(?:Error|Exception|Exit))\b", re.MULTILINE)
+
+
 class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
+        self.exc_types: dict[str, str] = {}
+        self.collect_errors: list[dict[str, str | None]] = []
         self.metrics: dict[str, float | int | dict[str, float | int]] = {}
         self.data_hashes: dict[str, str] | None = None
 
@@ -196,6 +205,21 @@ class Collector:
                 raise ValueError(f"{name} data hash must be a lowercase sha256 hex digest")
         self.data_hashes = {"train": train, "live": live}
 
+    @pytest.hookimpl(wrapper=True)
+    def pytest_runtest_makereport(self, item: pytest.Item, call: pytest.CallInfo[None]):
+        report = yield
+        # The first failure of a test (setup, call or teardown) names its exception class.
+        if report.failed and call.excinfo is not None and report.nodeid not in self.exc_types:
+            self.exc_types[report.nodeid] = call.excinfo.typename
+        return report
+
+    def pytest_collectreport(self, report: pytest.CollectReport) -> None:
+        if report.failed:
+            found = COLLECT_EXC.findall(str(report.longrepr))
+            self.collect_errors.append(
+                {"id": report.nodeid, "exc_type": found[-1] if found else None}
+            )
+
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         entry = self.tests.setdefault(
             report.nodeid, {"id": report.nodeid, "outcome": None, "duration_s": 0.0}
@@ -210,7 +234,14 @@ class Collector:
 
     def build(self, root: Path) -> dict[str, object]:
         base_ref = os.environ.get("CI_BASE_REF", "main")
-        tests = [dict(t, outcome=t["outcome"] or "error") for t in self.tests.values()]
+        tests = [
+            dict(
+                t,
+                outcome=t["outcome"] or "error",
+                exc_type=self.exc_types.get(t["id"]) if t["outcome"] != "skipped" else None,
+            )
+            for t in self.tests.values()
+        ]
         vulns = audit_vulnerabilities(os.environ.get("CI_AUDIT_JSON"))
         if vulns is not None:
             self.metrics["audit_vulns"] = vulns
@@ -225,6 +256,7 @@ class Collector:
             "metrics": dict(sorted(self.metrics.items())),
             "deps": locked_deps(root),
             "migrations": migrations(root),
+            "collect_errors": list(self.collect_errors),
         }
         if self.data_hashes is not None:
             report["data_hashes"] = dict(self.data_hashes)

@@ -336,7 +336,10 @@ def test_failures_carry_the_exception_type(pytester):
     pytester.makeini("[pytest]\n")
     pytester.makepyfile(test_repro=REPRO_TESTS, test_cannot_import="import not_a_module\n")
     path = pytester.path / "report.json"
-    pytester.runpytest("-p", "bank.testing.ci_report", f"--ci-report={path}")
+    # The repro run keeps going past a file that cannot import, as scripts/repro.py does.
+    pytester.runpytest(
+        "-p", "bank.testing.ci_report", f"--ci-report={path}", "--continue-on-collection-errors"
+    )  # fmt: skip
     report = json.loads(path.read_text())
     types = {t["id"].split("::")[-1]: t.get("exc_type") for t in report["tests"]}
     assert types == {
