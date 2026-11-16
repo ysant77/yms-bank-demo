@@ -76,3 +76,11 @@ starts with `refused:`.
   is kept, its upstream is set, and (for an attempt) the run record is written.
 - The temporary worktree is removed with stop signals held, and anything that could not be
   removed is named with the commands to remove it. Only `kill -9` can still leave a folder.
+- Credentials must be non-interactive (a credential helper, an ssh agent or a key without a
+  passphrase). Git steps run with `GIT_TERMINAL_PROMPT=0`, ssh in batch mode and no standard
+  input. Your own ssh setting is kept: `GIT_SSH_COMMAND` and `GIT_SSH` stay as they are, and a
+  `core.sshCommand` gets ` -o BatchMode=yes` added. So a step that needs a password fails at once. A hook
+  that reads `/dev/tty` directly still stops (SIGTTIN, because the step has its own process
+  group); press Ctrl-C three times (the third sends SIGKILL, which also ends a stopped process).
+- Attempt tables accept only the keys `name`, `commit`, `claim`, `steps`, `twin`, `twin_branch`
+  and `pr_title`; any other key is refused.
