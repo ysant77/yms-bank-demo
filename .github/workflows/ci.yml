@@ -159,3 +159,32 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # One check to require in the ruleset. It runs on every event, also when a job before it failed
+  # or was skipped, and fails unless each job that this event must run succeeded. A job skipped by
+  # its own "if" (for example "if: false") is then a failure, not a pass.
+  # Limit: this job is in the same file, so a pull request that edits this file can also change or
+  # skip the gate; GitHub reports a skipped required check as passed. The app does not trust CI
+  # evidence from a pull request that changes .github/workflows/ (docs/claims.md in agile-team).
+  gate:
+    if: ${{ always() }}
+    needs: [test, report, publish-main-report, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every required job succeeded
+        env:
+          TEST: ${{ needs.test.result }}
+          SECRETS: ${{ needs.secrets.result }}
+          REPORT: ${{ needs.report.result }}
+          PUBLISH: ${{ needs.publish-main-report.result }}
+          WANT_REPORT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+          WANT_PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          fail=0
+          need() { echo "$1: $2"; if [ "$2" != success ]; then echo "::error::$1 must succeed, result is $2"; fail=1; fi; }
+          need test "$TEST"
+          need secrets "$SECRETS"
+          if [ "$WANT_REPORT" = true ]; then need report "$REPORT"; else echo "report: $REPORT (not run for this event)"; fi
+          if [ "$WANT_PUBLISH" = true ]; then need publish-main-report "$PUBLISH"; else echo "publish-main-report: $PUBLISH (not run for this event)"; fi
+          exit "$fail"
