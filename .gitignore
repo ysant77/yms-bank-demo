@@ -14,3 +14,5 @@ dist/
 ci-report.json
 requirements-audit.txt
 audit.json
+coverage.json
+.coverage
