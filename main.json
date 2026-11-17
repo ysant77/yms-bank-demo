@@ -1,1186 +1,1235 @@
 {
   "schema": "aat-ci-report/2",
   "repository": "ysant77/yms-bank-demo",
-  "head_sha": "f899389819a05c7d245e87bb9810d1771cc13756",
-  "base_sha": "cca3303f0e19cf48747a3a2fde12e23a609ba224",
-  "generated_at": "2026-11-17T03:08:17Z",
+  "head_sha": "7c88e0518c46b241163ed28c04bcf084783050cf",
+  "base_sha": "f899389819a05c7d245e87bb9810d1771cc13756",
+  "generated_at": "2026-11-17T03:25:06Z",
   "workflow_files": {
-    ".github/workflows/ci.yml": "5daca70a305c8c637d139d0379d801fb99379b2ce78e378d561fd1aeeabc122a"
+    ".github/workflows/ci.yml": "0c4136b60227caab418be2165c56b6c8b8d97912414d1ff13023a80df6f42099"
   },
   "tests": [
     {
       "id": "tests/test_api.py::test_session_cookie_and_unknown_customer",
       "outcome": "passed",
-      "duration_s": 0.043555,
+      "duration_s": 0.030562,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_customer_list_for_demo_chooser",
       "outcome": "passed",
-      "duration_s": 0.011518,
+      "duration_s": 0.012039,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_list_accounts_shows_only_own",
       "outcome": "passed",
-      "duration_s": 0.015473,
+      "duration_s": 0.057308,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_every_account_route_checks_the_owner",
       "outcome": "passed",
-      "duration_s": 0.084903,
+      "duration_s": 0.040306,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_end_date_is_inclusive",
       "outcome": "passed",
-      "duration_s": 0.016757,
+      "duration_s": 0.015994,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_rejects_bad_dates",
       "outcome": "passed",
-      "duration_s": 0.017752,
+      "duration_s": 0.017233,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_success",
       "outcome": "passed",
-      "duration_s": 0.022947,
+      "duration_s": 0.022764,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_from_foreign_account_is_404",
       "outcome": "passed",
-      "duration_s": 0.017149,
+      "duration_s": 0.016821,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[100.01-YMS-0000-0003-409]",
       "outcome": "passed",
-      "duration_s": 0.018392,
+      "duration_s": 0.017673,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.001-YMS-0000-0003-400]",
       "outcome": "passed",
-      "duration_s": 0.017836,
+      "duration_s": 0.017193,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[0-YMS-0000-0003-400]",
       "outcome": "passed",
-      "duration_s": 0.017803,
+      "duration_s": 0.017411,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-9999-9999-404]",
       "outcome": "passed",
-      "duration_s": 0.018378,
+      "duration_s": 0.017934,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-CLR-EUR-404]",
       "outcome": "passed",
-      "duration_s": 0.017698,
+      "duration_s": 0.017475,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-0000-0002-404]",
       "outcome": "passed",
-      "duration_s": 0.017832,
+      "duration_s": 0.017538,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1.00-YMS-0000-0001-400]",
       "outcome": "passed",
-      "duration_s": 0.017666,
+      "duration_s": 0.017346,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[-5-YMS-0000-0003-422]",
       "outcome": "passed",
-      "duration_s": 0.017671,
+      "duration_s": 0.017303,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_errors[1e3-YMS-0000-0003-422]",
       "outcome": "passed",
-      "duration_s": 0.018757,
+      "duration_s": 0.01815,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_transfer_requires_an_idempotency_key",
       "outcome": "passed",
-      "duration_s": 0.017621,
+      "duration_s": 0.017067,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_retry_with_the_same_key_moves_money_once",
       "outcome": "passed",
-      "duration_s": 0.021867,
+      "duration_s": 0.021483,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_same_key_with_a_different_body_is_rejected",
       "outcome": "passed",
-      "duration_s": 0.021666,
+      "duration_s": 0.021664,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_wrong_currency_destination_does_not_reveal_its_currency",
       "outcome": "passed",
-      "duration_s": 0.014243,
+      "duration_s": 0.014823,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_dates_out_of_range_are_400[?to=9999-12-31]",
       "outcome": "passed",
-      "duration_s": 0.014529,
+      "duration_s": 0.015427,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_dates_out_of_range_are_400[?to=9999-01-01]",
       "outcome": "passed",
-      "duration_s": 0.015514,
+      "duration_s": 0.014325,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_dates_out_of_range_are_400[?from=1899-12-31&to=2026-05-01]",
       "outcome": "passed",
-      "duration_s": 0.014435,
+      "duration_s": 0.014344,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_statement_dates_out_of_range_are_400[?from=0001-01-01&to=2026-05-01]",
       "outcome": "passed",
-      "duration_s": 0.014488,
+      "duration_s": 0.014334,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_the_same_key_is_scoped_to_each_customer",
       "outcome": "passed",
-      "duration_s": 0.025905,
+      "duration_s": 0.02605,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_amount_spelling_does_not_change_the_request",
       "outcome": "passed",
-      "duration_s": 0.018607,
+      "duration_s": 0.019571,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_api.py::test_a_replay_returns_the_original_result",
       "outcome": "passed",
-      "duration_s": 0.023447,
+      "duration_s": 0.022453,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_bench.py::test_transfer_throughput",
       "outcome": "passed",
-      "duration_s": 0.21098,
+      "duration_s": 0.206574,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_ci_report.py::test_report_follows_the_format",
+      "id": "tests/test_changed_coverage.py::test_hunk_lines_are_read_from_a_one_file_diff",
       "outcome": "passed",
-      "duration_s": 0.076977,
+      "duration_s": 0.0002,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_ci_report.py::test_shas_fall_back_to_git",
-      "outcome": "passed",
-      "duration_s": 0.034737,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_no_report_without_option",
-      "outcome": "passed",
-      "duration_s": 0.022919,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[fast]",
-      "outcome": "passed",
-      "duration_s": 0.000264,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[True]",
-      "outcome": "passed",
-      "duration_s": 0.000206,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[nan]",
-      "outcome": "passed",
-      "duration_s": 0.000198,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[None]",
-      "outcome": "passed",
-      "duration_s": 0.000187,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_sql_operations_ignore_comments_and_clauses",
-      "outcome": "passed",
-      "duration_s": 0.000172,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_metric_fixture_is_available",
-      "outcome": "passed",
-      "duration_s": 0.000194,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_audit_vulnerabilities_counts_pip_audit_json",
-      "outcome": "passed",
-      "duration_s": 0.000474,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_data_hashes_block_is_optional",
-      "outcome": "passed",
-      "duration_s": 0.045706,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[]",
-      "outcome": "passed",
-      "duration_s": 0.000244,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[ABC]",
-      "outcome": "passed",
-      "duration_s": 0.000214,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
-      "outcome": "passed",
-      "duration_s": 0.000194,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[None]",
-      "outcome": "passed",
-      "duration_s": 0.000189,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_keeps_median_iqr_min_max_and_runs",
-      "outcome": "passed",
-      "duration_s": 0.000143,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_with_an_even_count_interpolates",
-      "outcome": "passed",
-      "duration_s": 0.000146,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_small_values_are_not_rounded_away",
+      "id": "tests/test_changed_coverage.py::test_only_executable_changed_lines_count",
       "outcome": "passed",
       "duration_s": 0.000129,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples0-ValueError]",
+      "id": "tests/test_changed_coverage.py::test_a_missing_base_total_is_null_not_zero",
       "outcome": "passed",
-      "duration_s": 0.000251,
+      "duration_s": 0.000126,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples1-ValueError]",
-      "outcome": "passed",
-      "duration_s": 0.000235,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples2-ValueError]",
-      "outcome": "passed",
-      "duration_s": 0.000227,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples3-ValueError]",
-      "outcome": "passed",
-      "duration_s": 0.000244,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[1234-TypeError]",
-      "outcome": "passed",
-      "duration_s": 0.000212,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples5-TypeError]",
-      "outcome": "passed",
-      "duration_s": 0.000214,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples6-TypeError]",
-      "outcome": "passed",
-      "duration_s": 0.000211,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_a_metric_is_written_once_per_run",
-      "outcome": "passed",
-      "duration_s": 0.000226,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_a_name_is_checked_before_the_samples",
-      "outcome": "passed",
-      "duration_s": 0.000159,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_a_rewrite_by_another_test_fails_the_run",
-      "outcome": "passed",
-      "duration_s": 0.029429,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_record_samples_fixture_is_available",
-      "outcome": "passed",
-      "duration_s": 0.000233,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_audit_vulns_is_reserved_for_the_plugin",
-      "outcome": "passed",
-      "duration_s": 0.000242,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_large_integer_samples_are_written_as_floats",
-      "outcome": "passed",
-      "duration_s": 0.000135,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_failures_carry_the_exception_type",
-      "outcome": "passed",
-      "duration_s": 0.032254,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ci_report.py::test_failures_carry_the_first_line_of_the_exception_message",
-      "outcome": "passed",
-      "duration_s": 0.026372,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw",
-      "outcome": "passed",
-      "duration_s": 0.075301,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_data.py::test_dataset_shape_and_columns",
-      "outcome": "passed",
-      "duration_s": 1.123269,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_data.py::test_fraud_rate_is_about_half_a_percent",
-      "outcome": "passed",
-      "duration_s": 0.000464,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_data.py::test_every_fraud_has_a_later_chargeback",
-      "outcome": "passed",
-      "duration_s": 0.00075,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_data.py::test_same_seed_gives_the_same_data",
-      "outcome": "passed",
-      "duration_s": 2.134017,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_psi_of_a_dataset_with_itself_is_zero",
-      "outcome": "passed",
-      "duration_s": 0.031542,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_psi_grows_with_drift",
-      "outcome": "passed",
-      "duration_s": 0.005289,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_ranking_metrics_on_a_known_case",
-      "outcome": "passed",
-      "duration_s": 0.004225,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_threshold_at_fpr_is_the_highest_threshold_with_the_best_recall",
-      "outcome": "passed",
-      "duration_s": 0.0013,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_fairness_ratio",
-      "outcome": "passed",
-      "duration_s": 0.000245,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_evaluate.py::test_data_hash_is_sha256_of_canonical_csv",
-      "outcome": "passed",
-      "duration_s": 0.000236,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_features_use_past_only",
-      "outcome": "passed",
-      "duration_s": 0.003648,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_history_features_have_source_times_before_the_transaction",
-      "outcome": "passed",
-      "duration_s": 0.001544,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_chargeback_window_counts_only_earlier_chargebacks",
-      "outcome": "passed",
-      "duration_s": 0.001529,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_past_only_check_catches_a_future_source",
-      "outcome": "passed",
-      "duration_s": 0.000199,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_chargeback_feature_matches_the_data_column",
-      "outcome": "passed",
-      "duration_s": 0.002305,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_features_do_not_change_when_later_chargebacks_are_removed",
-      "outcome": "passed",
-      "duration_s": 0.038175,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-7]",
-      "outcome": "passed",
-      "duration_s": 0.112942,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-8]",
-      "outcome": "passed",
-      "duration_s": 0.106471,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-11]",
-      "outcome": "passed",
-      "duration_s": 0.106618,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-7]",
-      "outcome": "passed",
-      "duration_s": 0.105359,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-8]",
-      "outcome": "passed",
-      "duration_s": 0.104923,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-11]",
-      "outcome": "passed",
-      "duration_s": 0.110694,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_the_behavioural_check_without_any_chargebacks",
-      "outcome": "passed",
-      "duration_s": 0.000238,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_features.py::test_chargeback_window_without_any_chargebacks",
-      "outcome": "passed",
-      "duration_s": 0.000178,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_split_is_time_based",
-      "outcome": "passed",
-      "duration_s": 0.002077,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_threshold_is_chosen_on_validation_not_holdout",
-      "outcome": "passed",
-      "duration_s": 0.011115,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_holdout_fpr_can_exceed_the_target_when_the_data_drifts",
-      "outcome": "passed",
-      "duration_s": 0.010153,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_model_metrics_are_recorded",
-      "outcome": "passed",
-      "duration_s": 0.000337,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_infinite_fpr_ratio_is_left_out_of_the_metrics",
-      "outcome": "passed",
-      "duration_s": 0.002567,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_fairness_report_covers_every_region",
-      "outcome": "passed",
-      "duration_s": 0.000168,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_fraud_model.py::test_data_hashes_are_recorded",
-      "outcome": "passed",
-      "duration_s": 0.000311,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_idempotency.py::test_concurrent_requests_with_one_key_move_money_once",
-      "outcome": "passed",
-      "duration_s": 0.017678,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_idempotency.py::test_the_key_is_stored_in_the_transfer_transaction",
-      "outcome": "passed",
-      "duration_s": 0.008182,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_idempotency.py::test_a_failed_attempt_stores_no_key",
-      "outcome": "passed",
-      "duration_s": 0.010385,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_idempotency.py::test_keys_expire_after_24_hours",
-      "outcome": "passed",
-      "duration_s": 0.002809,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_account_numbers_are_obviously_fake",
-      "outcome": "passed",
-      "duration_s": 0.002988,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_deposit_and_withdraw_keep_books_balanced",
-      "outcome": "passed",
-      "duration_s": 0.003509,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_transfer_moves_money",
-      "outcome": "passed",
-      "duration_s": 0.003446,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_overdraw_is_refused_and_nothing_is_written",
-      "outcome": "passed",
-      "duration_s": 0.003221,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_withdraw_whole_balance_is_allowed",
-      "outcome": "passed",
-      "duration_s": 0.003316,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_currency_mismatch_and_bad_amounts",
-      "outcome": "passed",
-      "duration_s": 0.005453,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_clearing_account_cannot_be_used_directly",
-      "outcome": "passed",
-      "duration_s": 0.003169,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_database_refuses_negative_customer_balance",
-      "outcome": "passed",
-      "duration_s": 0.003249,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_invariant_check_finds_tampering",
-      "outcome": "passed",
-      "duration_s": 0.003326,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_statement_running_balance",
-      "outcome": "passed",
-      "duration_s": 0.003597,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_statement_end_date_is_inclusive",
-      "outcome": "passed",
-      "duration_s": 0.003488,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_statement_rejects_reversed_range",
-      "outcome": "passed",
-      "duration_s": 0.003122,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_run_once_runs_a_job_once",
-      "outcome": "passed",
-      "duration_s": 0.002926,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_a_failed_job_leaves_nothing_and_runs_again",
-      "outcome": "passed",
-      "duration_s": 0.002902,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_a_nested_write_failure_undoes_only_its_block",
-      "outcome": "passed",
-      "duration_s": 0.002857,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_two_threads_run_a_job_once",
-      "outcome": "passed",
-      "duration_s": 0.535581,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_a_stray_transaction_is_not_joined_silently",
-      "outcome": "passed",
-      "duration_s": 0.003902,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_a_failed_undo_raises_chained_to_the_original_error",
-      "outcome": "passed",
-      "duration_s": 0.000261,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_ledger.py::test_a_failed_rollback_to_stops_the_job_and_commits_nothing",
-      "outcome": "passed",
-      "duration_s": 0.003411,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_up_applies_all_in_order_and_is_idempotent",
-      "outcome": "passed",
-      "duration_s": 0.00247,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_down_to_target_then_up_again",
-      "outcome": "passed",
-      "duration_s": 0.00486,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_two_workers_on_a_fresh_database_apply_each_migration_once",
-      "outcome": "passed",
-      "duration_s": 0.010106,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_statements_split_on_complete_sql",
-      "outcome": "passed",
-      "duration_s": 0.00014,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_a_trailing_comment_is_not_an_incomplete_statement",
-      "outcome": "passed",
-      "duration_s": 0.000143,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_failed_migration_rolls_back",
-      "outcome": "passed",
-      "duration_s": 0.001815,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[1_short.sql--- migrate:up\\nSELECT 1;\\n-- migrate:down\\nSELECT 1;\\n]",
-      "outcome": "passed",
-      "duration_s": 0.000514,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_no_down.sql--- migrate:up\\nSELECT 1;\\n]",
-      "outcome": "passed",
-      "duration_s": 0.000517,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_down_first.sql--- migrate:down\\nSELECT 1;\\n-- migrate:up\\nSELECT 1;\\n]",
-      "outcome": "passed",
-      "duration_s": 0.000473,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_migrate.py::test_a_truly_locked_database_is_reported_after_one_busy_wait",
-      "outcome": "passed",
-      "duration_s": 0.302709,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_eur_has_two_decimals",
-      "outcome": "passed",
-      "duration_s": 0.000167,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_jpy_has_no_minor_unit",
-      "outcome": "passed",
-      "duration_s": 0.000123,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_bhd_has_three_decimals",
-      "outcome": "passed",
-      "duration_s": 0.000115,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_half_even_rounding",
-      "outcome": "passed",
-      "duration_s": 0.000118,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_float_is_rejected",
-      "outcome": "passed",
-      "duration_s": 0.000133,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[BHD]",
-      "outcome": "passed",
-      "duration_s": 0.000238,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[EUR]",
-      "outcome": "passed",
-      "duration_s": 0.000185,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[GBP]",
-      "outcome": "passed",
-      "duration_s": 0.000183,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[JPY]",
-      "outcome": "passed",
-      "duration_s": 0.000176,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[KRW]",
-      "outcome": "passed",
-      "duration_s": 0.000166,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[KWD]",
-      "outcome": "passed",
-      "duration_s": 0.00018,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[SGD]",
-      "outcome": "passed",
-      "duration_s": 0.000163,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_round_trip_all_currencies[USD]",
-      "outcome": "passed",
-      "duration_s": 0.000167,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_money_add_and_mismatch",
-      "outcome": "passed",
-      "duration_s": 0.000178,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_str_shows_major_units",
-      "outcome": "passed",
-      "duration_s": 0.000118,
-      "exc_type": null,
-      "exc_message": null
-    },
-    {
-      "id": "tests/test_money.py::test_money_of_rejects_extra_decimals",
+      "id": "tests/test_changed_coverage.py::test_an_added_line_that_starts_with_two_plus_signs_does_not_hide_later_hunks",
       "outcome": "passed",
       "duration_s": 0.000136,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[NaN]",
+      "id": "tests/test_changed_coverage.py::test_changed_lines_excluded_from_coverage_are_reported",
       "outcome": "passed",
-      "duration_s": 0.000208,
+      "duration_s": 0.000124,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[Infinity]",
+      "id": "tests/test_changed_coverage.py::test_main_reads_changed_lines_of_the_checked_out_commit",
       "outcome": "passed",
-      "duration_s": 0.000199,
+      "duration_s": 0.039804,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[-Infinity]",
+      "id": "tests/test_changed_coverage.py::test_main_refuses_a_head_that_is_not_the_checked_out_commit",
       "outcome": "passed",
-      "duration_s": 0.000195,
+      "duration_s": 0.029188,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[abc]",
+      "id": "tests/test_ci_report.py::test_report_follows_the_format",
       "outcome": "passed",
-      "duration_s": 0.000176,
+      "duration_s": 0.0782,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_block_pairs_base_and_head_outcomes",
+      "id": "tests/test_ci_report.py::test_shas_fall_back_to_git",
       "outcome": "passed",
-      "duration_s": 0.000131,
+      "duration_s": 0.03524,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_a_failing_head_suite_is_reported",
+      "id": "tests/test_ci_report.py::test_no_report_without_option",
       "outcome": "passed",
-      "duration_s": 0.000117,
+      "duration_s": 0.024118,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_only_test_files_under_tests_are_copied",
+      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[fast]",
       "outcome": "passed",
-      "duration_s": 0.00013,
+      "duration_s": 0.000253,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_deleted_and_renamed_test_files_do_not_crash_and_are_recorded",
+      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[True]",
       "outcome": "passed",
-      "duration_s": 0.236979,
+      "duration_s": 0.000242,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_changed_pytest_support_and_config_are_listed",
+      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[nan]",
       "outcome": "passed",
-      "duration_s": 0.018232,
+      "duration_s": 0.00019,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_base_assertion_failure_and_collection_failure_are_told_apart",
+      "id": "tests/test_ci_report.py::test_record_metric_rejects_non_numbers[None]",
       "outcome": "passed",
-      "duration_s": 0.248098,
+      "duration_s": 0.000183,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_the_base_run_looks_like_an_ordinary_checkout",
+      "id": "tests/test_ci_report.py::test_sql_operations_ignore_comments_and_clauses",
       "outcome": "passed",
-      "duration_s": 0.236715,
+      "duration_s": 0.000151,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_a_missing_base_report_fails_the_step",
+      "id": "tests/test_ci_report.py::test_record_metric_fixture_is_available",
       "outcome": "passed",
-      "duration_s": 0.207743,
+      "duration_s": 0.000193,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_a_head_report_for_another_commit_fails_the_step",
+      "id": "tests/test_ci_report.py::test_audit_vulnerabilities_counts_pip_audit_json",
       "outcome": "passed",
-      "duration_s": 0.238259,
+      "duration_s": 0.000519,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_only_test_modules_are_copied[test_a.py]",
+      "id": "tests/test_ci_report.py::test_data_hashes_block_is_optional",
       "outcome": "passed",
-      "duration_s": 0.000283,
+      "duration_s": 0.047089,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_only_test_modules_are_copied[helpers.py]",
+      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[]",
+      "outcome": "passed",
+      "duration_s": 0.000257,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[ABC]",
+      "outcome": "passed",
+      "duration_s": 0.000234,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+      "outcome": "passed",
+      "duration_s": 0.00019,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_data_hashes_rejects_non_digests[None]",
+      "outcome": "passed",
+      "duration_s": 0.000207,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_keeps_median_iqr_min_max_and_runs",
+      "outcome": "passed",
+      "duration_s": 0.000136,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_with_an_even_count_interpolates",
+      "outcome": "passed",
+      "duration_s": 0.000124,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_small_values_are_not_rounded_away",
+      "outcome": "passed",
+      "duration_s": 0.000148,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples0-ValueError]",
+      "outcome": "passed",
+      "duration_s": 0.000246,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples1-ValueError]",
+      "outcome": "passed",
+      "duration_s": 0.000247,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples2-ValueError]",
+      "outcome": "passed",
+      "duration_s": 0.000246,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples3-ValueError]",
+      "outcome": "passed",
+      "duration_s": 0.000248,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[1234-TypeError]",
+      "outcome": "passed",
+      "duration_s": 0.00023,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples5-TypeError]",
+      "outcome": "passed",
+      "duration_s": 0.000223,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_record_samples_rejects_too_few_or_bad_values_and_writes_nothing[samples6-TypeError]",
+      "outcome": "passed",
+      "duration_s": 0.000224,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ci_report.py::test_a_metric_is_written_once_per_run",
       "outcome": "passed",
       "duration_s": 0.000206,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_base_test_ids_of_renamed_and_removed_test_files_are_recorded",
+      "id": "tests/test_ci_report.py::test_a_name_is_checked_before_the_samples",
       "outcome": "passed",
-      "duration_s": 0.459199,
+      "duration_s": 0.000172,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_a_base_module_that_does_not_collect_is_recorded",
+      "id": "tests/test_ci_report.py::test_a_rewrite_by_another_test_fails_the_run",
       "outcome": "passed",
-      "duration_s": 0.698268,
+      "duration_s": 0.029909,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_a_deleted_test_file_with_a_non_ascii_name_is_recorded",
+      "id": "tests/test_ci_report.py::test_record_samples_fixture_is_available",
       "outcome": "passed",
-      "duration_s": 0.017125,
+      "duration_s": 0.000267,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[.github/workflows/ci.yml]",
+      "id": "tests/test_ci_report.py::test_audit_vulns_is_reserved_for_the_plugin",
       "outcome": "passed",
-      "duration_s": 0.016482,
+      "duration_s": 0.00021,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[scripts/repro.py]",
+      "id": "tests/test_ci_report.py::test_large_integer_samples_are_written_as_floats",
       "outcome": "passed",
-      "duration_s": 0.016496,
+      "duration_s": 0.000138,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[scripts/changed_coverage.py]",
+      "id": "tests/test_ci_report.py::test_failures_carry_the_exception_type",
       "outcome": "passed",
-      "duration_s": 0.016001,
+      "duration_s": 0.032577,
       "exc_type": null,
       "exc_message": null
     },
     {
-      "id": "tests/test_repro_script.py::test_the_base_row_carries_the_exception_message",
+      "id": "tests/test_ci_report.py::test_failures_carry_the_first_line_of_the_exception_message",
+      "outcome": "passed",
+      "duration_s": 0.027308,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_concurrency.py::test_concurrent_withdrawals_never_overdraw",
+      "outcome": "passed",
+      "duration_s": 0.100546,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_data.py::test_dataset_shape_and_columns",
+      "outcome": "passed",
+      "duration_s": 1.117465,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_data.py::test_fraud_rate_is_about_half_a_percent",
+      "outcome": "passed",
+      "duration_s": 0.000459,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_data.py::test_every_fraud_has_a_later_chargeback",
+      "outcome": "passed",
+      "duration_s": 0.000713,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_data.py::test_same_seed_gives_the_same_data",
+      "outcome": "passed",
+      "duration_s": 2.023779,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_psi_of_a_dataset_with_itself_is_zero",
+      "outcome": "passed",
+      "duration_s": 0.030998,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_psi_grows_with_drift",
+      "outcome": "passed",
+      "duration_s": 0.005177,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_ranking_metrics_on_a_known_case",
+      "outcome": "passed",
+      "duration_s": 0.004303,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_threshold_at_fpr_is_the_highest_threshold_with_the_best_recall",
+      "outcome": "passed",
+      "duration_s": 0.001298,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_fairness_ratio",
+      "outcome": "passed",
+      "duration_s": 0.000236,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_evaluate.py::test_data_hash_is_sha256_of_canonical_csv",
+      "outcome": "passed",
+      "duration_s": 0.000205,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_features_use_past_only",
+      "outcome": "passed",
+      "duration_s": 0.003545,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_history_features_have_source_times_before_the_transaction",
+      "outcome": "passed",
+      "duration_s": 0.001457,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_chargeback_window_counts_only_earlier_chargebacks",
+      "outcome": "passed",
+      "duration_s": 0.001493,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_past_only_check_catches_a_future_source",
+      "outcome": "passed",
+      "duration_s": 0.000183,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_chargeback_feature_matches_the_data_column",
+      "outcome": "passed",
+      "duration_s": 0.002032,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_features_do_not_change_when_later_chargebacks_are_removed",
+      "outcome": "passed",
+      "duration_s": 0.036789,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-7]",
+      "outcome": "passed",
+      "duration_s": 0.107408,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-8]",
+      "outcome": "passed",
+      "duration_s": 0.100227,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[864000-11]",
+      "outcome": "passed",
+      "duration_s": 0.10049,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-7]",
+      "outcome": "passed",
+      "duration_s": 0.100147,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-8]",
+      "outcome": "passed",
+      "duration_s": 0.099932,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_catches_a_look_ahead_that_hides_its_source_time[3600-11]",
+      "outcome": "passed",
+      "duration_s": 0.102191,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_the_behavioural_check_without_any_chargebacks",
+      "outcome": "passed",
+      "duration_s": 0.000225,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_features.py::test_chargeback_window_without_any_chargebacks",
+      "outcome": "passed",
+      "duration_s": 0.000179,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_split_is_time_based",
+      "outcome": "passed",
+      "duration_s": 0.002039,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_threshold_is_chosen_on_validation_not_holdout",
+      "outcome": "passed",
+      "duration_s": 0.009765,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_holdout_fpr_can_exceed_the_target_when_the_data_drifts",
+      "outcome": "passed",
+      "duration_s": 0.009037,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_model_metrics_are_recorded",
+      "outcome": "passed",
+      "duration_s": 0.000322,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_infinite_fpr_ratio_is_left_out_of_the_metrics",
+      "outcome": "passed",
+      "duration_s": 0.002298,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_fraud_model.py::test_fairness_report_covers_every_region",
       "outcome": "passed",
       "duration_s": 0.000165,
       "exc_type": null,
       "exc_message": null
     },
     {
+      "id": "tests/test_fraud_model.py::test_data_hashes_are_recorded",
+      "outcome": "passed",
+      "duration_s": 0.00024,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_idempotency.py::test_concurrent_requests_with_one_key_move_money_once",
+      "outcome": "passed",
+      "duration_s": 0.020548,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_idempotency.py::test_the_key_is_stored_in_the_transfer_transaction",
+      "outcome": "passed",
+      "duration_s": 0.003106,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_idempotency.py::test_a_failed_attempt_stores_no_key",
+      "outcome": "passed",
+      "duration_s": 0.002791,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_idempotency.py::test_keys_expire_after_24_hours",
+      "outcome": "passed",
+      "duration_s": 0.002779,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_account_numbers_are_obviously_fake",
+      "outcome": "passed",
+      "duration_s": 0.003,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_deposit_and_withdraw_keep_books_balanced",
+      "outcome": "passed",
+      "duration_s": 0.003472,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_transfer_moves_money",
+      "outcome": "passed",
+      "duration_s": 0.003433,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_overdraw_is_refused_and_nothing_is_written",
+      "outcome": "passed",
+      "duration_s": 0.003149,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_withdraw_whole_balance_is_allowed",
+      "outcome": "passed",
+      "duration_s": 0.003159,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_currency_mismatch_and_bad_amounts",
+      "outcome": "passed",
+      "duration_s": 0.005148,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_clearing_account_cannot_be_used_directly",
+      "outcome": "passed",
+      "duration_s": 0.00321,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_database_refuses_negative_customer_balance",
+      "outcome": "passed",
+      "duration_s": 0.003196,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_invariant_check_finds_tampering",
+      "outcome": "passed",
+      "duration_s": 0.003317,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_statement_running_balance",
+      "outcome": "passed",
+      "duration_s": 0.003444,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_statement_end_date_is_inclusive",
+      "outcome": "passed",
+      "duration_s": 0.003442,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_statement_rejects_reversed_range",
+      "outcome": "passed",
+      "duration_s": 0.003036,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_run_once_runs_a_job_once",
+      "outcome": "passed",
+      "duration_s": 0.00274,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_a_failed_job_leaves_nothing_and_runs_again",
+      "outcome": "passed",
+      "duration_s": 0.002895,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_a_nested_write_failure_undoes_only_its_block",
+      "outcome": "passed",
+      "duration_s": 0.002729,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_two_threads_run_a_job_once",
+      "outcome": "passed",
+      "duration_s": 0.534503,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_a_stray_transaction_is_not_joined_silently",
+      "outcome": "passed",
+      "duration_s": 0.003883,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_a_failed_undo_raises_chained_to_the_original_error",
+      "outcome": "passed",
+      "duration_s": 0.000273,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_ledger.py::test_a_failed_rollback_to_stops_the_job_and_commits_nothing",
+      "outcome": "passed",
+      "duration_s": 0.003281,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_up_applies_all_in_order_and_is_idempotent",
+      "outcome": "passed",
+      "duration_s": 0.002417,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_down_to_target_then_up_again",
+      "outcome": "passed",
+      "duration_s": 0.005711,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_two_workers_on_a_fresh_database_apply_each_migration_once",
+      "outcome": "passed",
+      "duration_s": 0.004518,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_statements_split_on_complete_sql",
+      "outcome": "passed",
+      "duration_s": 0.00013,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_a_trailing_comment_is_not_an_incomplete_statement",
+      "outcome": "passed",
+      "duration_s": 0.000138,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_failed_migration_rolls_back",
+      "outcome": "passed",
+      "duration_s": 0.001791,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[1_short.sql--- migrate:up\\nSELECT 1;\\n-- migrate:down\\nSELECT 1;\\n]",
+      "outcome": "passed",
+      "duration_s": 0.000536,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_no_down.sql--- migrate:up\\nSELECT 1;\\n]",
+      "outcome": "passed",
+      "duration_s": 0.000515,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_malformed_files_are_rejected[0001_down_first.sql--- migrate:down\\nSELECT 1;\\n-- migrate:up\\nSELECT 1;\\n]",
+      "outcome": "passed",
+      "duration_s": 0.000498,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_migrate.py::test_a_truly_locked_database_is_reported_after_one_busy_wait",
+      "outcome": "passed",
+      "duration_s": 0.30272,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_eur_has_two_decimals",
+      "outcome": "passed",
+      "duration_s": 0.000169,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_jpy_has_no_minor_unit",
+      "outcome": "passed",
+      "duration_s": 0.000149,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_bhd_has_three_decimals",
+      "outcome": "passed",
+      "duration_s": 0.000114,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_half_even_rounding",
+      "outcome": "passed",
+      "duration_s": 0.000119,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_float_is_rejected",
+      "outcome": "passed",
+      "duration_s": 0.000129,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[BHD]",
+      "outcome": "passed",
+      "duration_s": 0.000231,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[EUR]",
+      "outcome": "passed",
+      "duration_s": 0.000197,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[GBP]",
+      "outcome": "passed",
+      "duration_s": 0.000176,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[JPY]",
+      "outcome": "passed",
+      "duration_s": 0.000165,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[KRW]",
+      "outcome": "passed",
+      "duration_s": 0.000188,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[KWD]",
+      "outcome": "passed",
+      "duration_s": 0.000169,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[SGD]",
+      "outcome": "passed",
+      "duration_s": 0.000178,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_round_trip_all_currencies[USD]",
+      "outcome": "passed",
+      "duration_s": 0.000174,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_add_and_mismatch",
+      "outcome": "passed",
+      "duration_s": 0.000149,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_str_shows_major_units",
+      "outcome": "passed",
+      "duration_s": 0.000126,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_of_rejects_extra_decimals",
+      "outcome": "passed",
+      "duration_s": 0.000153,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[NaN]",
+      "outcome": "passed",
+      "duration_s": 0.000192,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[Infinity]",
+      "outcome": "passed",
+      "duration_s": 0.000209,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[-Infinity]",
+      "outcome": "passed",
+      "duration_s": 0.000175,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_money.py::test_money_of_rejects_non_numbers[abc]",
+      "outcome": "passed",
+      "duration_s": 0.000202,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_block_pairs_base_and_head_outcomes",
+      "outcome": "passed",
+      "duration_s": 0.000137,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_a_failing_head_suite_is_reported",
+      "outcome": "passed",
+      "duration_s": 0.000118,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_only_test_files_under_tests_are_copied",
+      "outcome": "passed",
+      "duration_s": 0.00016,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_deleted_and_renamed_test_files_do_not_crash_and_are_recorded",
+      "outcome": "passed",
+      "duration_s": 0.235888,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_changed_pytest_support_and_config_are_listed",
+      "outcome": "passed",
+      "duration_s": 0.018237,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_base_assertion_failure_and_collection_failure_are_told_apart",
+      "outcome": "passed",
+      "duration_s": 0.24647,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_the_base_run_looks_like_an_ordinary_checkout",
+      "outcome": "passed",
+      "duration_s": 0.235236,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_a_missing_base_report_fails_the_step",
+      "outcome": "passed",
+      "duration_s": 0.207427,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_a_head_report_for_another_commit_fails_the_step",
+      "outcome": "passed",
+      "duration_s": 0.236946,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_only_test_modules_are_copied[test_a.py]",
+      "outcome": "passed",
+      "duration_s": 0.000408,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_only_test_modules_are_copied[helpers.py]",
+      "outcome": "passed",
+      "duration_s": 0.000204,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_base_test_ids_of_renamed_and_removed_test_files_are_recorded",
+      "outcome": "passed",
+      "duration_s": 0.454893,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_a_base_module_that_does_not_collect_is_recorded",
+      "outcome": "passed",
+      "duration_s": 0.691232,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_a_deleted_test_file_with_a_non_ascii_name_is_recorded",
+      "outcome": "passed",
+      "duration_s": 0.01639,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[.github/workflows/ci.yml]",
+      "outcome": "passed",
+      "duration_s": 0.015911,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[scripts/repro.py]",
+      "outcome": "passed",
+      "duration_s": 0.015715,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_ci_files_count_as_changed_support[scripts/changed_coverage.py]",
+      "outcome": "passed",
+      "duration_s": 0.015775,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
+      "id": "tests/test_repro_script.py::test_the_base_row_carries_the_exception_message",
+      "outcome": "passed",
+      "duration_s": 0.000151,
+      "exc_type": null,
+      "exc_message": null
+    },
+    {
       "id": "tests/test_scenario_script.py::test_valid_keys[BANK-3]",
       "outcome": "passed",
-      "duration_s": 0.000233,
+      "duration_s": 0.000222,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_valid_keys[BANK-123]",
       "outcome": "passed",
-      "duration_s": 0.000191,
+      "duration_s": 0.000174,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_valid_keys[QA2-7]",
       "outcome": "passed",
-      "duration_s": 0.00018,
+      "duration_s": 0.000203,
       "exc_type": null,
       "exc_message": null
     },
@@ -1194,945 +1243,945 @@
     {
       "id": "tests/test_scenario_script.py::test_invalid_keys_are_refused[bank-3]",
       "outcome": "passed",
-      "duration_s": 0.000185,
+      "duration_s": 0.000194,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_invalid_keys_are_refused[BANK-0]",
       "outcome": "passed",
-      "duration_s": 0.000183,
+      "duration_s": 0.000176,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_invalid_keys_are_refused[BANK-3; rm -rf /]",
       "outcome": "passed",
-      "duration_s": 0.000201,
+      "duration_s": 0.000173,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_invalid_keys_are_refused[-3]",
       "outcome": "passed",
-      "duration_s": 0.000174,
+      "duration_s": 0.000192,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_invalid_keys_are_refused[]",
       "outcome": "passed",
-      "duration_s": 0.000167,
+      "duration_s": 0.000187,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[main-twin]",
       "outcome": "passed",
-      "duration_s": 0.000231,
+      "duration_s": 0.000253,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[master-base]",
       "outcome": "passed",
-      "duration_s": 0.00021,
+      "duration_s": 0.000215,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[test/main-base]",
       "outcome": "passed",
-      "duration_s": 0.000253,
+      "duration_s": 0.00024,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[fix/../main-twin]",
       "outcome": "passed",
-      "duration_s": 0.000207,
+      "duration_s": 0.000222,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[feature/x-twin]",
       "outcome": "passed",
-      "duration_s": 0.000216,
+      "duration_s": 0.000211,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[fix/x-base]",
       "outcome": "passed",
-      "duration_s": 0.000217,
+      "duration_s": 0.000228,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[test/x-twin]",
       "outcome": "passed",
-      "duration_s": 0.000207,
+      "duration_s": 0.000209,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_protected_or_badly_named_branches_are_refused[ci-reports-base]",
       "outcome": "passed",
-      "duration_s": 0.000212,
+      "duration_s": 0.000269,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_allowed_branches",
       "outcome": "passed",
-      "duration_s": 0.000121,
+      "duration_s": 0.00013,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[../outside.py]",
       "outcome": "passed",
-      "duration_s": 0.000295,
+      "duration_s": 0.000322,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[/etc/passwd]",
       "outcome": "passed",
-      "duration_s": 0.000178,
+      "duration_s": 0.000181,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.git/config]",
       "outcome": "passed",
-      "duration_s": 0.000317,
+      "duration_s": 0.000316,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[tests/../../x]",
       "outcome": "passed",
-      "duration_s": 0.000185,
+      "duration_s": 0.000184,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.GIT/config]",
       "outcome": "passed",
-      "duration_s": 0.000283,
+      "duration_s": 0.000298,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.Git/hooks/x]",
       "outcome": "passed",
-      "duration_s": 0.000295,
+      "duration_s": 0.000304,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.github/workflows/ci.yml]",
       "outcome": "passed",
-      "duration_s": 0.000319,
+      "duration_s": 0.000305,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.GitHub/Workflows/x.yml]",
       "outcome": "passed",
-      "duration_s": 0.000302,
+      "duration_s": 0.000303,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[.githooks/pre-commit]",
       "outcome": "passed",
-      "duration_s": 0.000269,
+      "duration_s": 0.000309,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_paths_must_stay_inside_the_repository[]",
       "outcome": "passed",
-      "duration_s": 0.00017,
+      "duration_s": 0.000185,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_scenario_that_targets_main_is_refused_before_git",
       "outcome": "passed",
-      "duration_s": 0.000149,
+      "duration_s": 0.000136,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_step_that_writes_outside_the_repository_is_refused",
       "outcome": "passed",
-      "duration_s": 0.000456,
+      "duration_s": 0.000437,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_the_twin_branch_must_name_the_issue_key",
       "outcome": "passed",
-      "duration_s": 0.000135,
+      "duration_s": 0.000136,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_every_scenario_file_validates[S01]",
       "outcome": "passed",
-      "duration_s": 0.000856,
+      "duration_s": 0.000822,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_every_scenario_file_validates[S04]",
       "outcome": "passed",
-      "duration_s": 0.001263,
+      "duration_s": 0.001213,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_every_scenario_file_validates[S17]",
       "outcome": "passed",
-      "duration_s": 0.000779,
+      "duration_s": 0.00074,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_every_scenario_file_validates[S32]",
       "outcome": "passed",
-      "duration_s": 0.002061,
+      "duration_s": 0.001965,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_every_scenario_file_validates[S40]",
       "outcome": "passed",
-      "duration_s": 0.001109,
+      "duration_s": 0.001147,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_bad_arguments_return_2_without_touching_git",
       "outcome": "passed",
-      "duration_s": 0.004279,
+      "duration_s": 0.003992,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_clean_ref_is_the_parent_of_the_seed_commit",
       "outcome": "passed",
-      "duration_s": 0.017543,
+      "duration_s": 0.016899,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_unsafe_refs_are_refused",
       "outcome": "passed",
-      "duration_s": 0.000171,
+      "duration_s": 0.000163,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_commit_and_pr_text_say_only_scripted_or_live",
       "outcome": "passed",
-      "duration_s": 0.000132,
+      "duration_s": 0.000138,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_live_model_name_never_reaches_git",
       "outcome": "passed",
-      "duration_s": 0.104124,
+      "duration_s": 0.098881,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_existing_twin_must_descend_from_the_base",
       "outcome": "passed",
-      "duration_s": 0.051076,
+      "duration_s": 0.05056,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_malformed_scenario_field_is_refused",
       "outcome": "passed",
-      "duration_s": 0.018304,
+      "duration_s": 0.017612,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_missing_scenario_or_a_git_failure_returns_2",
       "outcome": "passed",
-      "duration_s": 0.019757,
+      "duration_s": 0.019106,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_renaming_seed_is_committed_completely",
       "outcome": "passed",
-      "duration_s": 0.050844,
+      "duration_s": 0.050011,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[no-base]",
       "outcome": "passed",
-      "duration_s": 0.016469,
+      "duration_s": 0.015902,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[no-twin-branch]",
       "outcome": "passed",
-      "duration_s": 0.016055,
+      "duration_s": 0.015448,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[bad-step-key]",
       "outcome": "passed",
-      "duration_s": 0.01676,
+      "duration_s": 0.015845,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[replace-without-old]",
       "outcome": "passed",
-      "duration_s": 0.016395,
+      "duration_s": 0.015815,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[step-folder-magic]",
       "outcome": "passed",
-      "duration_s": 0.016202,
+      "duration_s": 0.016097,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[product-in-title]",
       "outcome": "passed",
-      "duration_s": 0.016603,
+      "duration_s": 0.015917,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[version-in-pr-title]",
       "outcome": "passed",
-      "duration_s": 0.016283,
+      "duration_s": 0.015967,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[tool-in-commit]",
       "outcome": "passed",
-      "duration_s": 0.016625,
+      "duration_s": 0.016167,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[trailer-in-commit]",
       "outcome": "passed",
-      "duration_s": 0.016537,
+      "duration_s": 0.016201,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[product-as-twin]",
       "outcome": "passed",
-      "duration_s": 0.016437,
+      "duration_s": 0.016188,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[product-in-branch]",
       "outcome": "passed",
-      "duration_s": 0.016777,
+      "duration_s": 0.016187,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_incomplete_specs_and_tool_names_are_refused[product-in-seed]",
       "outcome": "passed",
-      "duration_s": 0.016546,
+      "duration_s": 0.015978,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_ordinary_words_are_not_refused[word-0]",
       "outcome": "passed",
-      "duration_s": 0.000222,
+      "duration_s": 0.000313,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_ordinary_words_are_not_refused[word-1]",
       "outcome": "passed",
-      "duration_s": 0.000184,
+      "duration_s": 0.000194,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_ordinary_words_are_not_refused[word-2]",
       "outcome": "passed",
-      "duration_s": 0.000173,
+      "duration_s": 0.000202,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_ordinary_words_are_not_refused[word-3]",
       "outcome": "passed",
-      "duration_s": 0.000171,
+      "duration_s": 0.000183,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_ordinary_words_are_not_refused[word-4]",
       "outcome": "passed",
-      "duration_s": 0.000176,
+      "duration_s": 0.000174,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_the_key_must_match_on_a_token_boundary",
       "outcome": "passed",
-      "duration_s": 0.000152,
+      "duration_s": 0.000159,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_bad_from_says_why",
       "outcome": "passed",
-      "duration_s": 0.019248,
+      "duration_s": 0.01882,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_step_restores_the_starting_branch",
       "outcome": "passed",
-      "duration_s": 0.066326,
+      "duration_s": 0.064407,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_push_uses_an_explicit_refspec",
       "outcome": "passed",
-      "duration_s": 0.060658,
+      "duration_s": 0.060311,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_step_keeps_an_existing_twin_branch_at_its_tip",
       "outcome": "passed",
-      "duration_s": 0.093411,
+      "duration_s": 0.090896,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_ignored_file_at_a_test_destination_is_not_overwritten",
       "outcome": "passed",
-      "duration_s": 0.084054,
+      "duration_s": 0.080551,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_step_path_that_is_a_folder_is_refused",
       "outcome": "passed",
-      "duration_s": 0.020381,
+      "duration_s": 0.019496,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_pathspec_magic_and_the_root_are_refused[top]",
       "outcome": "passed",
-      "duration_s": 0.015922,
+      "duration_s": 0.01534,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_pathspec_magic_and_the_root_are_refused[glob]",
       "outcome": "passed",
-      "duration_s": 0.01613,
+      "duration_s": 0.015331,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_pathspec_magic_and_the_root_are_refused[dot]",
       "outcome": "passed",
-      "duration_s": 0.016179,
+      "duration_s": 0.015674,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_pathspec_magic_and_the_root_are_refused[dot-slash]",
       "outcome": "passed",
-      "duration_s": 0.016171,
+      "duration_s": 0.015211,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_pathspec_magic_and_the_root_are_refused[slash]",
       "outcome": "passed",
-      "duration_s": 0.016187,
+      "duration_s": 0.015728,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_interrupt_during_a_step_still_rolls_back",
       "outcome": "passed",
-      "duration_s": 0.062793,
+      "duration_s": 0.061208,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_seed_that_is_not_utf8_is_refused_and_rolled_back",
       "outcome": "passed",
-      "duration_s": 0.036888,
+      "duration_s": 0.036501,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_step_from_a_detached_head_returns_there",
       "outcome": "passed",
-      "duration_s": 0.065578,
+      "duration_s": 0.064812,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_branch_undo_says_so",
       "outcome": "passed",
-      "duration_s": 0.060416,
+      "duration_s": 0.05985,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_reads_use_the_branch_not_a_tag_with_the_same_name",
       "outcome": "passed",
-      "duration_s": 0.071449,
+      "duration_s": 0.070557,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_runs_never_touch_the_users_checkout",
       "outcome": "passed",
-      "duration_s": 0.106795,
+      "duration_s": 0.105011,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_base_keeps_an_ignored_user_file_where_the_seed_adds_one",
       "outcome": "passed",
-      "duration_s": 0.053703,
+      "duration_s": 0.051982,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_revert_seed_keeps_an_ignored_user_file",
       "outcome": "passed",
-      "duration_s": 0.083193,
+      "duration_s": 0.081161,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_replace_never_edits_an_ignored_user_file",
       "outcome": "passed",
-      "duration_s": 0.066876,
+      "duration_s": 0.064212,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_restore_never_writes_over_an_ignored_user_file",
       "outcome": "passed",
-      "duration_s": 0.073193,
+      "duration_s": 0.070728,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_non_normalised_path_and_a_tracked_symlink_are_refused",
       "outcome": "passed",
-      "duration_s": 0.019921,
+      "duration_s": 0.019535,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_tool_name_in_the_key_is_refused",
       "outcome": "passed",
-      "duration_s": 0.043772,
+      "duration_s": 0.042788,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_interrupt_right_after_the_switch_leaves_nothing",
       "outcome": "passed",
-      "duration_s": 0.059507,
+      "duration_s": 0.057478,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_run_never_rewinds_a_commit_it_did_not_make",
       "outcome": "passed",
-      "duration_s": 0.099188,
+      "duration_s": 0.095029,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_branch_created_by_someone_else_is_never_deleted",
       "outcome": "passed",
-      "duration_s": 0.031602,
+      "duration_s": 0.03043,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_twin_checked_out_by_the_user_is_never_rewound",
       "outcome": "passed",
-      "duration_s": 0.09108,
+      "duration_s": 0.087945,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_live_lock_makes_a_second_run_refuse",
       "outcome": "passed",
-      "duration_s": 0.046222,
+      "duration_s": 0.044225,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_git_location_variables_from_the_caller_are_ignored",
       "outcome": "passed",
-      "duration_s": 0.068789,
+      "duration_s": 0.065577,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_sigterm_rolls_back_like_ctrl_c",
       "outcome": "passed",
-      "duration_s": 0.12276,
+      "duration_s": 0.057989,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_leftover_temporary_worktree_names_the_command",
       "outcome": "passed",
-      "duration_s": 0.079108,
+      "duration_s": 0.074743,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_interrupt_after_a_finished_run_keeps_its_commit",
       "outcome": "passed",
-      "duration_s": 0.069663,
+      "duration_s": 0.066309,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_add_test_never_overwrites_a_tracked_file_with_other_content",
       "outcome": "passed",
-      "duration_s": 0.122868,
+      "duration_s": 0.116844,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_users_worktree_with_a_missing_folder_is_not_touched",
       "outcome": "passed",
-      "duration_s": 0.05063,
+      "duration_s": 0.048797,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_during_the_switch_still_rolls_back[int]",
       "outcome": "passed",
-      "duration_s": 0.034788,
+      "duration_s": 0.033049,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_during_the_switch_still_rolls_back[term]",
       "outcome": "passed",
-      "duration_s": 0.035573,
+      "duration_s": 0.033183,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_during_the_commit_still_rolls_back",
       "outcome": "passed",
-      "duration_s": 0.042276,
+      "duration_s": 0.040408,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_interrupt_after_the_remote_accepted_the_push_keeps_the_run",
       "outcome": "passed",
-      "duration_s": 0.067771,
+      "duration_s": 0.065054,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_while_the_switch_is_recorded_is_held",
       "outcome": "passed",
-      "duration_s": 0.03229,
+      "duration_s": 0.031112,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_while_the_commit_is_recorded_is_held",
       "outcome": "passed",
-      "duration_s": 0.04398,
+      "duration_s": 0.042113,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_repeated_signal_ends_a_blocked_git_step_and_rolls_back",
       "outcome": "passed",
-      "duration_s": 0.400675,
+      "duration_s": 0.39819,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_signal_during_the_tree_clean_up_is_held_until_it_is_done",
       "outcome": "passed",
-      "duration_s": 0.043892,
+      "duration_s": 0.042644,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_push_finished_before_an_interrupt_sets_upstream_and_writes_the_record",
       "outcome": "passed",
-      "duration_s": 0.091623,
+      "duration_s": 0.090634,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_two_twins_get_two_branches_for_one_ticket",
       "outcome": "passed",
-      "duration_s": 0.104408,
+      "duration_s": 0.100691,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_attempt_branch_must_still_name_the_key",
       "outcome": "passed",
-      "duration_s": 0.04737,
+      "duration_s": 0.04494,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_attempt_pr_title_is_checked",
       "outcome": "passed",
-      "duration_s": 0.020408,
+      "duration_s": 0.019584,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_git_steps_never_prompt_and_keep_the_users_ssh_command[none]",
       "outcome": "passed",
-      "duration_s": 0.019439,
+      "duration_s": 0.01881,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_git_steps_never_prompt_and_keep_the_users_ssh_command[env]",
       "outcome": "passed",
-      "duration_s": 0.018378,
+      "duration_s": 0.017962,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_git_steps_never_prompt_and_keep_the_users_ssh_command[core]",
       "outcome": "passed",
-      "duration_s": 0.02056,
+      "duration_s": 0.019554,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_git_steps_never_prompt_and_keep_the_users_ssh_command[git_ssh]",
       "outcome": "passed",
-      "duration_s": 0.017564,
+      "duration_s": 0.017299,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_hook_that_reads_input_gets_end_of_file",
       "outcome": "passed",
-      "duration_s": 0.06839,
+      "duration_s": 0.066348,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_interrupt_during_clean_up_still_writes_the_run_record",
       "outcome": "passed",
-      "duration_s": 0.068747,
+      "duration_s": 0.066055,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_a_failed_unregister_names_git_worktree_prune",
       "outcome": "passed",
-      "duration_s": 0.042235,
+      "duration_s": 0.0406,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_script.py::test_an_unknown_attempt_key_is_refused",
       "outcome": "passed",
-      "duration_s": 0.020185,
+      "duration_s": 0.019563,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_templates.py::test_a_rendered_fraud_template_runs_beside_the_model_test[S17]",
       "outcome": "passed",
-      "duration_s": 2.312123,
+      "duration_s": 2.259216,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_scenario_templates.py::test_a_rendered_fraud_template_runs_beside_the_model_test[S40]",
       "outcome": "passed",
-      "duration_s": 2.373385,
+      "duration_s": 2.286857,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_same_seed_gives_same_data",
       "outcome": "passed",
-      "duration_s": 0.016547,
+      "duration_s": 0.01482,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_cli_builds_full_demo_database",
       "outcome": "passed",
-      "duration_s": 0.179695,
+      "duration_s": 0.176141,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_cli_refuses_to_overwrite",
       "outcome": "passed",
-      "duration_s": 0.001168,
+      "duration_s": 0.001097,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_full_seed_keeps_every_running_balance_non_negative",
       "outcome": "passed",
-      "duration_s": 0.167653,
+      "duration_s": 0.163183,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_default_seed_ends_the_day_before_now",
       "outcome": "passed",
-      "duration_s": 0.008833,
+      "duration_s": 0.010779,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_entries_after_now_are_cut_and_the_summary_says_so",
       "outcome": "passed",
-      "duration_s": 0.006067,
+      "duration_s": 0.006297,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_invariants_catch_a_posting_before_the_opening",
       "outcome": "passed",
-      "duration_s": 0.003566,
+      "duration_s": 0.003426,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_seed_data.py::test_invariants_catch_a_negative_running_balance",
       "outcome": "passed",
-      "duration_s": 0.003438,
+      "duration_s": 0.003355,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_startup_seeding.py::test_two_workers_starting_together_seed_once",
       "outcome": "passed",
-      "duration_s": 0.033626,
+      "duration_s": 0.02271,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_startup_seeding.py::test_a_seed_that_fails_part_way_leaves_nothing_and_is_retried",
       "outcome": "passed",
-      "duration_s": 0.028737,
+      "duration_s": 0.027297,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_startup_seeding.py::test_a_database_with_customers_is_not_seeded",
       "outcome": "passed",
-      "duration_s": 0.010685,
+      "duration_s": 0.01023,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_send_button_not_hidden_at_or_below_430px",
       "outcome": "passed",
-      "duration_s": 0.001095,
+      "duration_s": 0.001064,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 430px) { .x #send-button { display: none } }-True]",
       "outcome": "passed",
-      "duration_s": 0.000299,
+      "duration_s": 0.000292,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 600px) { button.btn-primary { display:none; } }-True]",
       "outcome": "passed",
-      "duration_s": 0.000233,
+      "duration_s": 0.000247,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (min-width: 431px) { #send-button { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000228,
+      "duration_s": 0.000231,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media (max-width: 430px) { .hide-small { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000263,
+      "duration_s": 0.000235,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[@media print { #send-button { display: none } }-False]",
       "outcome": "passed",
-      "duration_s": 0.000221,
+      "duration_s": 0.000243,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[/* #send-button { display: none } */ .btn { color: red }-False]",
       "outcome": "passed",
-      "duration_s": 0.000221,
+      "duration_s": 0.000206,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_css_check_finds_hiding_rules[#send-button:disabled { display: none }-True]",
       "outcome": "passed",
-      "duration_s": 0.000222,
+      "duration_s": 0.000237,
       "exc_type": null,
       "exc_message": null
     },
     {
       "id": "tests/test_web.py::test_pages_are_served_without_external_assets",
       "outcome": "passed",
-      "duration_s": 0.019863,
+      "duration_s": 0.02201,
       "exc_type": null,
       "exc_message": null
     }
@@ -2147,11 +2196,11 @@
     "psi_amount": 0.00010231225015279399,
     "recall_at_threshold": 0.6254295532646048,
     "transfers_per_s": {
-      "median": 22548.6,
-      "iqr_low": 21475.100000000002,
-      "iqr_high": 22816.774999999998,
-      "min": 18398.2,
-      "max": 23493.8,
+      "median": 23064.75,
+      "iqr_low": 21802.699999999997,
+      "iqr_high": 23470.375,
+      "min": 18612.0,
+      "max": 23668.1,
       "runs": 20
     }
   },
@@ -2166,6 +2215,7 @@
     "click": "8.5.1",
     "cloudpickle": "3.1.2",
     "colorama": "0.4.6",
+    "coverage": "7.17.3",
     "cyclonedx-python-lib": "9.1.0",
     "defusedxml": "0.7.1",
     "fastapi": "0.162.5",
@@ -2197,6 +2247,7 @@
     "pygments": "2.21.0",
     "pyparsing": "3.3.3",
     "pytest": "9.2.0",
+    "pytest-cov": "7.1.0",
     "requests": "2.34.2",
     "rich": "15.0.0",
     "ruff": "0.17.4",
@@ -2247,5 +2298,12 @@
   "data_hashes": {
     "train": "e352d1b7938a938656b5eee5b80a95c43545954eb3943a4de6e94b2ba4672a6a",
     "live": "c7b4c9ba4334d8606567531a2b00d282153c1cecff17156b5174bb53c16c15dd"
+  },
+  "coverage": {
+    "changed_executable": 0,
+    "changed_covered": 0,
+    "changed_excluded": 0,
+    "head_total": 89.11,
+    "base_total": null
   }
 }
