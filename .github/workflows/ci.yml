@@ -49,19 +49,25 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: uv run python scripts/repro.py --base "$BASE_SHA" --head "$HEAD_SHA" --head-report ci-report.json
-      # D-cov: coverage of the changed lines of src/, and the head and base totals. The base total
-      # comes from the main report on the ci-reports branch.
-      - name: Coverage of the changed lines
-        if: ${{ !cancelled() }}
+      # D-cov: the main report (main.json on the ci-reports branch) holds the base total. It is
+      # the report of the latest push to main, not of the pull request's base commit. It is
+      # fetched in its own step, so no step that runs pull request code sees the token.
+      - name: Fetch the main report
+        if: ${{ github.event_name == 'pull_request' && !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           gh api "repos/$REPO/contents/main.json?ref=ci-reports" --jq .content 2>/dev/null \
             | base64 -d > main.json || rm -f main.json
-          args=(--coverage coverage.json --head-report ci-report.json --head "$HEAD_SHA")
+      # D-cov: coverage of the changed lines of src/. The diff ends at the checked-out commit (for
+      # a pull request, the merge commit), the commit that the coverage run measured.
+      - name: Coverage of the changed lines
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          args=(--coverage coverage.json --head-report ci-report.json)
           if [ -n "$BASE_SHA" ]; then args+=(--base "$BASE_SHA" --base-report main.json); fi
           uv run python scripts/changed_coverage.py "${args[@]}"
       - name: Upload CI report
