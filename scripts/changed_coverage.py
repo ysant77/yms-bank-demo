@@ -77,7 +77,11 @@ def changed_lines(root: Path, base: str, head: str) -> dict[str, set[int]]:
 
 def build_block(changed: dict[str, set[int]], coverage: dict, base_report: dict | None) -> dict:
     executable = covered = excluded = 0
+    unmeasured = []
     for path, lines in changed.items():
+        if path not in coverage.get("files", {}):
+            # Its changed lines would count as neither executable nor covered.
+            unmeasured.append(path)
         data = coverage.get("files", {}).get(path, {})
         executed = set(data.get("executed_lines", []))
         missing = set(data.get("missing_lines", []))
@@ -93,6 +97,7 @@ def build_block(changed: dict[str, set[int]], coverage: dict, base_report: dict 
         "changed_excluded": excluded,
         "head_total": round(float(coverage["totals"]["percent_covered"]), 2),
         "base_total": base_total if isinstance(base_total, int | float) else None,
+        "unmeasured_files": sorted(unmeasured),
     }
 
 

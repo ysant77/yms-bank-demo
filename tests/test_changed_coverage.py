@@ -50,6 +50,7 @@ def test_only_executable_changed_lines_count():
         "changed_excluded": 0,
         "head_total": 91.23,
         "base_total": 90.8,
+        "unmeasured_files": [],
     }
 
 
@@ -57,6 +58,18 @@ def test_a_missing_base_total_is_null_not_zero():
     coverage = {"files": {}, "totals": {"percent_covered": 50}}
     assert cc.build_block({}, coverage, None)["base_total"] is None
     assert cc.build_block({}, coverage, {"tests": []})["base_total"] is None
+
+
+def test_a_changed_file_missing_from_the_coverage_data_is_named():
+    # A fault of the coverage step can leave out a file. Its changed lines then count as neither
+    # executable nor covered, so the counts alone look complete.
+    coverage = {
+        "files": {"src/bank/api.py": {"executed_lines": [5], "missing_lines": []}},
+        "totals": {"percent_covered": 90},
+    }
+    block = cc.build_block({"src/bank/api.py": {5}, "src/bank/ledger.py": {7, 8}}, coverage, None)
+    assert block["changed_executable"] == 1
+    assert block["unmeasured_files"] == ["src/bank/ledger.py"]
 
 
 def test_an_added_line_that_starts_with_two_plus_signs_does_not_hide_later_hunks():
