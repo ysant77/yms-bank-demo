@@ -271,3 +271,53 @@ def test_base_test_ids_of_renamed_and_removed_test_files_are_recorded(tmp_path):
         "tests/test_keep.py::test_keep",
         "tests/test_old.py::test_old",
     ]
+
+
+def test_a_base_module_that_does_not_collect_is_recorded(tmp_path):
+    # Review finding 7: an import error on base gives no ids. The block must say so, so the
+    # verifier reads it as missing evidence, never as "no test dropped".
+    broken = "import missing_module_xyz\n\n\ndef test_keep():\n    assert True\n"
+    root, base, head = _repo(
+        tmp_path,
+        dict(BASE, **{"tests/test_keep.py": broken}),
+        {"tests/test_keep.py": "def test_keep():\n    assert True\n"},
+    )
+    ids, collect = repro.collect_base_ids(root, base, ["tests/test_keep.py", "tests/test_old.py"])
+    assert ids == ["tests/test_old.py::test_old"]
+    assert collect["rc"] != 0
+    assert collect["modules_without_ids"] == ["tests/test_keep.py"]
+    out = tmp_path / "ci-report.json"
+    out.write_text(
+        json.dumps(
+            {
+                "head_sha": head,
+                "tests": [{"id": "tests/test_keep.py::test_keep", "outcome": "passed"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    repro.main(["--base", base, "--head", head, "--head-report", str(out)], root=root)
+    block = json.loads(out.read_text(encoding="utf-8"))["repro"]
+    assert block["base_collect"]["modules_without_ids"] == ["tests/test_keep.py"]
+    assert block["base_collect"]["rc"] != 0
+
+
+def test_a_deleted_test_file_with_a_non_ascii_name_is_recorded(tmp_path):
+    # Review finding 8: git quotes such a path unless -z is used.
+    root, base, head = _repo(
+        tmp_path,
+        dict(BASE, **{"tests/test_café.py": "def test_c():\n    assert True\n"}),
+        {"tests/test_café.py": None},
+    )
+    changed = repro.changed_paths(root, base, head)
+    assert changed["removed_tests"] == ["tests/test_café.py"]
+    assert "tests/test_café.py" in changed["base_side"]
+
+
+@pytest.mark.parametrize(
+    "name", [".github/workflows/ci.yml", "scripts/repro.py", "scripts/changed_coverage.py"]
+)
+def test_ci_files_count_as_changed_support(tmp_path, name):
+    # Review finding 9: a PR can add "if: false" to a required job or change a CI script.
+    root, base, head = _repo(tmp_path, dict(BASE, **{name: "x = 1\n"}), {name: "x = 2\n"})
+    assert name in repro.changed_paths(root, base, head)["support"]
