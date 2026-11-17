@@ -14,7 +14,8 @@
 The block also records ``head_sha``, the base run (``rc``, ``collected``, ``report``), the
 changed pytest support and config files (``changed_support``), the removed test files, and
 the test ids that the base commit has in every test module the PR changes, renames or removes
-(``base_test_ids``), so a dropped test is visible even when git reads the change as a rename. The
+(``base_test_ids``, with the collection exit code and the modules that gave no id in
+``base_collect``), so a dropped test is visible even when git reads the change as a rename. The
 step fails (exit 1) when there are test files but no base report, or when the head report is for
 another commit. The script never decides anything: the verifier reads the block.
 
@@ -62,6 +63,9 @@ def is_support(f: str) -> bool:
         Path(f).name == "conftest.py"
         or f in SUPPORT_FILES
         or (f.startswith("tests/") and not is_test_module(f))
+        # The workflow and the CI scripts decide what runs and what the report says: a PR can add
+        # "if: false" to a required job or change this script.
+        or f.startswith((".github/", "scripts/"))
     )
 
 
@@ -73,10 +77,18 @@ def test_files(changed: list[str]) -> list[str]:
 def changed_paths(root: Path, base_sha: str, head_sha: str) -> dict[str, list[str]]:
     """Test modules to copy, test modules removed, changed support files, and the base-side paths
     of every test module the PR changes, renames or removes."""
-    out = git("diff", "--name-status", "-M", f"{base_sha}...{head_sha}", cwd=root)
+    # -z: paths are not quoted, so a non-ASCII or unusual name is read as it is.
+    out = git("diff", "--name-status", "-z", "-M", f"{base_sha}...{head_sha}", cwd=root)
+    fields = out.split("\0")
+    entries = []
+    i = 0
+    while i < len(fields) and fields[i]:
+        status = fields[i]
+        n = 2 if status[0] in "RC" else 1
+        entries.append((status, fields[i + 1 : i + 1 + n]))
+        i += 1 + n
     tests, removed, support, base_side = set(), set(), set(), set()
-    for line in out.splitlines():
-        status, *paths = line.split("\t")
+    for status, paths in entries:
         if not status.startswith("A") and is_test_module(paths[0]):
             base_side.add(paths[0])
         if status.startswith("D"):
@@ -106,6 +118,7 @@ def build_block(
     support: list[str] | None = None,
     removed: list[str] | None = None,
     base_test_ids: list[str] | None = None,
+    base_collect: dict | None = None,
 ) -> dict:
     base_tests = {t["id"]: t for t in base.get("tests", [])}
     broken = {e["id"]: e.get("exc_type") for e in base.get("collect_errors", [])}
@@ -130,6 +143,7 @@ def build_block(
         "changed_support": support or [],
         "removed_test_files": removed or [],
         "base_test_ids": base_test_ids or [],
+        "base_collect": base_collect,
         "tests": rows,
         "full_suite": {
             "outcome": "failed" if failed else "passed",
@@ -139,10 +153,12 @@ def build_block(
     }
 
 
-def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> list[str]:
-    """Test ids that the base commit has in the given test modules (pytest --collect-only)."""
+def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> tuple[list[str], dict]:
+    """Test ids that the base commit has in the given test modules (pytest --collect-only), and
+    the collection facts: the exit code and the modules that gave no id. A module without ids
+    (an import error on base, for example) is missing evidence, not "no test dropped"."""
     if not paths:
-        return []
+        return [], {"rc": None, "modules_without_ids": []}
     work = Path(tempfile.mkdtemp())
     tree = work / root.name
     try:
@@ -151,14 +167,27 @@ def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> list[str]:
         env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
         env.update(PYTHONPATH="src")
         proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "--collect-only", "-q", *paths],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                "--continue-on-collection-errors",
+                *paths,
+            ],
             cwd=tree,
             env=env,
             check=False,
             capture_output=True,
             text=True,
         )
-        return sorted({line.strip() for line in proc.stdout.splitlines() if "::" in line})
+        ids = sorted({line.strip() for line in proc.stdout.splitlines() if "::" in line})
+        found = {i.split("::")[0] for i in ids}
+        return ids, {
+            "rc": proc.returncode,
+            "modules_without_ids": sorted(p for p in paths if p not in found),
+        }
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -221,6 +250,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         base, run = run_on_base(root, base_sha, head_sha, files)
     else:
         base, run = {"tests": []}, None
+    base_ids, base_collect = collect_base_ids(root, base_sha, changed["base_side"])
     head["repro"] = build_block(
         base_sha,
         files,
@@ -230,7 +260,8 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         base_run=run,
         support=changed["support"],
         removed=changed["removed_tests"],
-        base_test_ids=collect_base_ids(root, base_sha, changed["base_side"]),
+        base_test_ids=base_ids,
+        base_collect=base_collect,
     )
     args.head_report.write_text(
         json.dumps(head, indent=2, allow_nan=False) + "\n", encoding="utf-8"
