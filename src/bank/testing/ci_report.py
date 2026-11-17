@@ -13,7 +13,8 @@ written once per run; a second write is refused. Model tests can record the sha2
 training and live data through the ``record_data_hashes`` fixture, which adds an optional
 ``data_hashes`` block. Head and base commits come from ``CI_HEAD_SHA`` and ``CI_BASE_SHA``,
 else from ``git rev-parse`` (``HEAD`` and ``CI_BASE_REF``, default ``main``). A failed or broken
-test has ``exc_type``, the name of its exception class, and a test file that cannot be collected
+test has ``exc_type``, the name of its exception class, and ``exc_message``, the first line of
+the exception text (at most 200 characters), and a test file that cannot be collected
 is listed in ``collect_errors`` with its exception type. ``scripts/repro.py`` uses both to tell
 "fails by an assertion" from "cannot run" on the base commit.
 """
@@ -140,6 +141,7 @@ class Collector:
     def __init__(self) -> None:
         self.tests: dict[str, dict[str, object]] = {}
         self.exc_types: dict[str, str] = {}
+        self.exc_messages: dict[str, str] = {}
         self.collect_errors: list[dict[str, str | None]] = []
         self.metrics: dict[str, float | int | dict[str, float | int]] = {}
         self.data_hashes: dict[str, str] | None = None
@@ -211,6 +213,8 @@ class Collector:
         # The first failure of a test (setup, call or teardown) names its exception class.
         if report.failed and call.excinfo is not None and report.nodeid not in self.exc_types:
             self.exc_types[report.nodeid] = call.excinfo.typename
+            text = call.excinfo.exconly().splitlines()
+            self.exc_messages[report.nodeid] = (text[0] if text else "")[:200]
         return report
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
@@ -239,6 +243,7 @@ class Collector:
                 t,
                 outcome=t["outcome"] or "error",
                 exc_type=self.exc_types.get(t["id"]) if t["outcome"] != "skipped" else None,
+                exc_message=self.exc_messages.get(t["id"]) if t["outcome"] != "skipped" else None,
             )
             for t in self.tests.values()
         ]
