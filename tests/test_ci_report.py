@@ -351,3 +351,16 @@ def test_failures_carry_the_exception_type(pytester):
     assert report["collect_errors"] == [
         {"id": "test_cannot_import.py", "exc_type": "ModuleNotFoundError"}
     ]
+
+
+def test_failures_carry_the_first_line_of_the_exception_message(pytester):
+    # The verifier's new-function rule needs the base AttributeError to name the function.
+    pytester.makeini("[pytest]\n")
+    pytester.makepyfile(test_repro=REPRO_TESTS)
+    path = pytester.path / "report.json"
+    pytester.runpytest("-p", "bank.testing.ci_report", f"--ci-report={path}")
+    report = json.loads(path.read_text())
+    messages = {t["id"].split("::")[-1]: t.get("exc_message") for t in report["tests"]}
+    assert messages["test_attr"] == "AttributeError: 'NoneType' object has no attribute 'missing'"
+    assert messages["test_setup"] == "RuntimeError: setup fails"
+    assert messages["test_ok"] is None

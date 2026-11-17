@@ -321,3 +321,21 @@ def test_ci_files_count_as_changed_support(tmp_path, name):
     # Review finding 9: a PR can add "if: false" to a required job or change a CI script.
     root, base, head = _repo(tmp_path, dict(BASE, **{name: "x = 1\n"}), {name: "x = 2\n"})
     assert name in repro.changed_paths(root, base, head)["support"]
+
+
+def test_the_base_row_carries_the_exception_message():
+    base = {
+        "tests": [
+            {
+                "id": T1,
+                "outcome": "failed",
+                "exc_type": "AttributeError",
+                "exc_message": "AttributeError: module 'bank.ledger' has no attribute 'totals'",
+            }
+        ]
+    }
+    head = {"tests": [{"id": T1, "outcome": "passed"}]}
+    block = repro.build_block("b" * 40, ["tests/test_transfers.py"], base, head)
+    assert block["tests"][0]["base"]["exc_message"] == (
+        "AttributeError: module 'bank.ledger' has no attribute 'totals'"
+    )
