@@ -181,6 +181,7 @@ def test_base_assertion_failure_and_collection_failure_are_told_apart(tmp_path):
     assert rows["tests/test_fix.py::test_fix"] == {
         "outcome": "failed",
         "exc_type": "AssertionError",
+        "exc_message": "AssertionError: assert 1 == 2",
     }
     assert rows["tests/test_new.py::test_new"] == {
         "outcome": "error",

@@ -130,6 +130,8 @@ def build_block(
         if t["id"] in base_tests:
             b = base_tests[t["id"]]
             base_result = {"outcome": b["outcome"], "exc_type": b.get("exc_type")}
+            if b.get("exc_message"):
+                base_result["exc_message"] = b["exc_message"]
         else:
             # Not collected on base: the file did not import, or the test did not exist there.
             base_result = {"outcome": "error", "exc_type": broken.get(file)}
