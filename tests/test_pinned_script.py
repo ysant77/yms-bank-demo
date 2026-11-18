@@ -38,13 +38,23 @@ def test_an_edited_value_or_an_added_skip_changes_the_hash():
 
 
 def test_only_test_functions_are_hashed_and_a_bad_module_gives_none():
-    src = "def helper():\n    pass\n\n\nclass TestX:\n    def test_m(self):\n        assert 1\n\n\n" + OLD
+    src = (
+        "def helper():\n    pass\n\n\nclass TestX:\n    def test_m(self):\n        assert 1\n\n\n"
+        + OLD
+    )
     assert sorted(pinned.body_hashes(src)) == ["TestX::test_m", "test_one"]
     assert pinned.body_hashes("def (:\n") is None
 
 
 def test_entries_name_unchanged_edited_renamed_and_deleted_tests():
-    base = {"tests/test_a.py": {"test_keep": "h1", "test_edit": "h2", "test_old_name": "h3", "test_gone": "h4"}}
+    base = {
+        "tests/test_a.py": {
+            "test_keep": "h1",
+            "test_edit": "h2",
+            "test_old_name": "h3",
+            "test_gone": "h4",
+        }
+    }
     head = {"tests/test_a.py": {"test_keep": "h1", "test_edit": "h9", "test_new_name": "h3"}}
     outcomes = {
         "tests/test_a.py::test_keep": "passed",
@@ -173,3 +183,26 @@ def test_no_changed_test_module_gives_an_empty_block(tmp_path):
     assert rows == {}
     assert block["tests"] == []
     assert block["modules"] == []
+
+
+def test_a_head_symlink_at_a_pinned_path_is_not_followed(tmp_path):
+    # The head tree comes from the pull request. A symlink at the module path must not let the
+    # base copy write outside the clone.
+    outside = tmp_path / "outside.py"
+    outside.write_text("KEEP = 1\n", encoding="utf-8")
+    root, base, head = _repo(tmp_path, {"tests/test_api.py": None})
+    (root / "tests" / "test_api.py").symlink_to(outside)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "link")
+    head = _git(root, "rev-parse", "HEAD")
+    pinned.run_base_copies(root, base, head, ["tests/test_api.py"])
+    assert outside.read_text(encoding="utf-8") == "KEEP = 1\n"
+
+
+def test_a_parametrized_test_takes_the_worst_outcome_of_its_parameters():
+    # Found on the set 4 case branches: the report ids of a parametrized test end in "[...]".
+    outcomes = {"t.py::test_p[a]": "passed", "t.py::test_p[b]": "failed", "t.py::test_q[x]": "passed"}
+    assert pinned.outcome_of(outcomes, "t.py::test_p") == "failed"
+    assert pinned.outcome_of(outcomes, "t.py::test_q") == "passed"
+    assert pinned.outcome_of({"t.py::test_p[a]": "skipped"}, "t.py::test_p") == "not_run"
+    assert pinned.outcome_of({"t.py::test_p[a]": "passed", "t.py::test_p[b]": "skipped"}, "t.py::test_p") == "not_run"
