@@ -5,8 +5,8 @@ copies against the head code (called by scripts/repro.py; agile-team docs/PROTEC
    version and hash the body of each test function (the AST with the function name blanked, so
    a rename keeps the hash and spacing or comments do not change it; decorators count).
 2. Clone the repository at the head commit, write the base version of those modules over the
-   head tree, and run them with pytest and the report plugin. The head's code and the head's
-   pytest configuration are used, so a deselect in the head configuration shows as "not_run".
+   head tree, and run them with pytest and the report plugin. The head's code is used. The
+   head's ``addopts`` are ignored (``-o addopts=``), so a head plugin or deselect does not apply.
 3. For each base test, record its head name and hash (the same name, or another name with the
    same body in a changed head module; none when it is gone) and the outcome of its base copy.
 
@@ -151,7 +151,13 @@ def run_base_copies(root: Path, base_sha: str, head_sha: str, modules: list[str]
                 "pytest",
                 "-q",
                 "--continue-on-collection-errors",
-                # The same marker selection as the CI report step, so a bench test runs too.
+                # The head's addopts are ignored: a head -p plugin or --deselect must not apply
+                # to the base copies. The report plugin and the marker selection of the CI
+                # report step are set here.
+                "-o",
+                "addopts=",
+                "-p",
+                "bank.testing.ci_report",
                 "-m",
                 "bench or not bench",
                 f"--ci-report={out}",
