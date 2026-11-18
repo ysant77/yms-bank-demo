@@ -164,8 +164,9 @@ def test_a_deleted_test_has_no_head_side(tmp_path):
     assert rows["test_dates"]["head_hash"] is None
 
 
-def test_a_test_deselected_by_the_head_configuration_is_not_run(tmp_path):
-    # Benchmark U17 shape: the head adds a --deselect for an old test and changes its module.
+def test_a_head_deselect_does_not_hide_a_pinned_base_copy(tmp_path):
+    # Benchmark U17 shape: the head adds a --deselect for an old test. The base copies run with
+    # the head's addopts ignored (-o addopts=), so the pinned test still runs.
     deselect = PYPROJECT.replace(
         '"bank.testing.ci_report"]',
         '"bank.testing.ci_report", "--deselect", "tests/test_api.py::test_other"]',
@@ -173,8 +174,27 @@ def test_a_test_deselected_by_the_head_configuration_is_not_run(tmp_path):
     head_api = BASE["tests/test_api.py"] + "\n\ndef test_new():\n    assert True\n"
     root, base, head = _repo(tmp_path, {"pyproject.toml": deselect, "tests/test_api.py": head_api})
     rows, _ = _run(tmp_path, root, base, head)
-    assert rows["test_other"]["outcome"] == "not_run"
+    assert rows["test_other"]["outcome"] == "passed"
     assert rows["test_status_is_409"]["outcome"] == "passed"
+
+
+def test_a_head_pytest_plugin_in_addopts_is_not_loaded(tmp_path):
+    # A head pyproject could load a plugin from head code that rewrites outcomes. The base-copy
+    # run ignores the head's addopts; here the plugin would fail at import if it were loaded.
+    plugin = PYPROJECT.replace(
+        '"bank.testing.ci_report"]', '"bank.testing.ci_report", "-p", "pkg.boom"]'
+    )
+    head_api = BASE["tests/test_api.py"] + "\n\ndef test_new():\n    assert True\n"
+    root, base, head = _repo(
+        tmp_path,
+        {
+            "pyproject.toml": plugin,
+            "src/pkg/boom.py": "raise RuntimeError('head plugin loaded')\n",
+            "tests/test_api.py": head_api,
+        },
+    )
+    outcomes = pinned.run_base_copies(root, base, head, ["tests/test_api.py"])
+    assert outcomes["tests/test_api.py::test_status_is_409"] == "passed"
 
 
 def test_no_changed_test_module_gives_an_empty_block(tmp_path):
