@@ -201,8 +201,17 @@ def test_a_head_symlink_at_a_pinned_path_is_not_followed(tmp_path):
 
 def test_a_parametrized_test_takes_the_worst_outcome_of_its_parameters():
     # Found on the set 4 case branches: the report ids of a parametrized test end in "[...]".
-    outcomes = {"t.py::test_p[a]": "passed", "t.py::test_p[b]": "failed", "t.py::test_q[x]": "passed"}
+    outcomes = {
+        "t.py::test_p[a]": "passed",
+        "t.py::test_p[b]": "failed",
+        "t.py::test_q[x]": "passed",
+    }
     assert pinned.outcome_of(outcomes, "t.py::test_p") == "failed"
     assert pinned.outcome_of(outcomes, "t.py::test_q") == "passed"
     assert pinned.outcome_of({"t.py::test_p[a]": "skipped"}, "t.py::test_p") == "not_run"
-    assert pinned.outcome_of({"t.py::test_p[a]": "passed", "t.py::test_p[b]": "skipped"}, "t.py::test_p") == "not_run"
+    assert (
+        pinned.outcome_of(
+            {"t.py::test_p[a]": "passed", "t.py::test_p[b]": "skipped"}, "t.py::test_p"
+        )
+        == "not_run"
+    )

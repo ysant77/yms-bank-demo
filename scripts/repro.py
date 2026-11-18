@@ -42,6 +42,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pinned import build as build_pinned  # noqa: E402
+
 FAILED = {"failed", "error"}
 # Files that change how pytest collects or runs tests, besides the test modules themselves.
 SUPPORT_FILES = {"pyproject.toml", "uv.lock", "pytest.ini", "setup.cfg", "tox.ini", ".coveragerc"}
@@ -301,6 +304,14 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     else:
         base, run = {"tests": []}, None
     base_ids, base_collect = collect_base_ids(root, base_sha, changed["base_side"])
+    # Protected regression set: the base copies of the changed test modules on the head code.
+    head["pinned"] = build_pinned(
+        root,
+        base_sha,
+        head_sha,
+        checked_test_paths(root, changed["base_side"])[0],
+        checked_test_paths(root, changed["tests"])[0],
+    )
     head["repro"] = build_block(
         base_sha,
         files,
