@@ -340,3 +340,95 @@ def test_the_base_row_carries_the_exception_message():
     assert block["tests"][0]["base"]["exc_message"] == (
         "AttributeError: module 'bank.ledger' has no attribute 'totals'"
     )
+
+
+# ---- Harness safety: test paths from the PR diff reach pytest only as checked file paths ----
+
+
+@pytest.mark.parametrize(
+    ("path", "reason"),
+    [
+        ("--rootdir=/tmp/test_x.py", "starts with -"),
+        ("-ptest_x.py", "starts with -"),
+        ("tests/../../outside/test_x.py", "has a parent reference"),
+        ("/etc/tests/test_x.py", "is absolute"),
+        ("tests/helpers.py", "is not a test module path"),
+        ("tests/sub/-x/test_a.py", "is not a test module path"),
+    ],
+)
+def test_a_test_path_that_is_not_a_plain_test_module_is_refused(tmp_path, path, reason):
+    ok, refused = repro.checked_test_paths(tmp_path, [path])
+    assert ok == []
+    assert refused == [{"path": path, "reason": reason}]
+
+
+def test_a_plain_test_module_path_is_kept(tmp_path):
+    paths = ["tests/test_a.py", "tests/unit/test_café.py"]
+    assert repro.checked_test_paths(tmp_path, paths) == (paths, [])
+
+
+def test_a_test_path_through_a_symlink_out_of_the_repository_is_refused(tmp_path):
+    tree, outside = tmp_path / "tree", tmp_path / "outside"
+    (tree / "tests").mkdir(parents=True)
+    outside.mkdir()
+    (tree / "tests" / "linked").symlink_to(outside, target_is_directory=True)
+    ok, refused = repro.checked_test_paths(tree, ["tests/linked/test_x.py"])
+    assert ok == []
+    assert refused == [
+        {"path": "tests/linked/test_x.py", "reason": "resolves outside the repository"}
+    ]
+
+
+def test_the_base_run_does_not_write_through_a_symlink_out_of_the_repository(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q", "-b", "main")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "t")
+    _write(root, BASE)
+    (root / "tests" / "linked").symlink_to(outside, target_is_directory=True)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    (root / "tests" / "linked").unlink()
+    _write(root, {"tests/linked/test_x.py": "def test_x():\n    assert True\n"})
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "head")
+    head = _git(root, "rev-parse", "HEAD")
+    files = repro.changed_paths(root, base, head)["tests"]
+    assert files == ["tests/linked/test_x.py"]
+    report, run = repro.run_on_base(root, base, head, files)
+    assert not (outside / "test_x.py").exists()
+    assert report["tests"] == []  # no path left: pytest must not run the whole base suite
+    assert run["rc"] is None
+    assert run["refused"] == [
+        {"path": "tests/linked/test_x.py", "reason": "resolves outside the repository"}
+    ]
+    out = tmp_path / "ci-report.json"
+    out.write_text(json.dumps({"head_sha": head, "tests": []}), encoding="utf-8")
+    rc = repro.main(["--base", base, "--head", head, "--head-report", str(out)], root=root)
+    assert rc == 1
+    assert not (outside / "test_x.py").exists()
+
+
+def test_pytest_gets_the_test_paths_after_a_double_dash(tmp_path, monkeypatch):
+    root, base, head = _repo(
+        tmp_path, BASE, {"tests/test_fix.py": "def test_fix():\n    assert True\n"}
+    )
+    calls = []
+    real = repro.subprocess.run
+
+    def spy(cmd, *a, **k):
+        if "pytest" in cmd:
+            calls.append(cmd)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(repro.subprocess, "run", spy)
+    repro.run_on_base(root, base, head, ["tests/test_fix.py"])
+    repro.collect_base_ids(root, base, ["tests/test_keep.py"])
+    assert len(calls) == 2
+    for cmd in calls:
+        assert cmd[cmd.index("--") + 1 :] == [cmd[-1]]
+        assert cmd[-1].startswith("tests/")

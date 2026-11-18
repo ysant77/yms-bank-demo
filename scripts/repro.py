@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -46,6 +47,8 @@ FAILED = {"failed", "error"}
 SUPPORT_FILES = {"pyproject.toml", "uv.lock", "pytest.ini", "setup.cfg", "tox.ini", ".coveragerc"}
 # Variables of the CI step that runs this script; the head test run does not have them.
 SCRIPT_VARS = {"BASE_SHA", "HEAD_SHA"}
+# A test module path that may reach pytest: under tests/, plain names, no part starts with . or -
+TEST_PATH = re.compile(r"tests/(?:[\w][\w.-]*/)*test_[\w.-]*\.py")
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
@@ -72,6 +75,32 @@ def is_support(f: str) -> bool:
 def test_files(changed: list[str]) -> list[str]:
     """Test modules the pull request adds or changes; conftest.py and data files are left out."""
     return sorted(f for f in changed if is_test_module(f))
+
+
+def checked_test_paths(tree: Path, paths: list[str]) -> tuple[list[str], list[dict]]:
+    """Split the test paths from the PR diff into paths that may reach pytest and refused paths.
+
+    A path is refused when it starts with "-" (pytest could read it as an option), is absolute,
+    has a ".." part, does not match ``TEST_PATH``, or resolves (symlinks too) outside ``tree``.
+    The paths come from the PR, so they are untrusted input."""
+    top = tree.resolve()
+    ok, refused = [], []
+    for p in paths:
+        if p.startswith("-"):
+            reason = "starts with -"
+        elif Path(p).is_absolute():
+            reason = "is absolute"
+        elif ".." in Path(p).parts:
+            reason = "has a parent reference"
+        elif not TEST_PATH.fullmatch(p):
+            reason = "is not a test module path"
+        elif not (tree / p).resolve().is_relative_to(top):
+            reason = "resolves outside the repository"
+        else:
+            ok.append(p)
+            continue
+        refused.append({"path": p, "reason": reason})
+    return ok, refused
 
 
 def changed_paths(root: Path, base_sha: str, head_sha: str) -> dict[str, list[str]]:
@@ -166,6 +195,9 @@ def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> tuple[list[
     try:
         git("clone", "--quiet", "--shared", "--no-checkout", str(root), str(tree), cwd=work)
         git("checkout", "--quiet", "--detach", base_sha, cwd=tree)
+        paths, refused = checked_test_paths(tree, paths)
+        if not paths:
+            return [], {"rc": None, "modules_without_ids": [], "refused": refused}
         env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
         env.update(PYTHONPATH="src")
         proc = subprocess.run(
@@ -176,6 +208,7 @@ def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> tuple[list[
                 "--collect-only",
                 "-q",
                 "--continue-on-collection-errors",
+                "--",
                 *paths,
             ],
             cwd=tree,
@@ -186,10 +219,13 @@ def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> tuple[list[
         )
         ids = sorted({line.strip() for line in proc.stdout.splitlines() if "::" in line})
         found = {i.split("::")[0] for i in ids}
-        return ids, {
+        facts = {
             "rc": proc.returncode,
             "modules_without_ids": sorted(p for p in paths if p not in found),
         }
+        if refused:
+            facts["refused"] = refused
+        return ids, facts
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -201,6 +237,15 @@ def run_on_base(root: Path, base_sha: str, head_sha: str, files: list[str]) -> t
     try:
         git("clone", "--quiet", "--shared", "--no-checkout", str(root), str(tree), cwd=work)
         git("checkout", "--quiet", "--detach", base_sha, cwd=tree)
+        files, refused = checked_test_paths(tree, files)
+        if not files:
+            # With no path after "--", pytest would run the whole base suite.
+            return {"tests": []}, {
+                "rc": None,
+                "collected": None,
+                "report": False,
+                "refused": refused,
+            }
         for f in files:
             target = tree / f
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -220,6 +265,7 @@ def run_on_base(root: Path, base_sha: str, head_sha: str, files: list[str]) -> t
                 "-q",
                 "--continue-on-collection-errors",
                 f"--ci-report={out}",
+                "--",
                 *files,
             ],
             cwd=tree,
@@ -232,6 +278,8 @@ def run_on_base(root: Path, base_sha: str, head_sha: str, files: list[str]) -> t
             "collected": len(report.get("tests", [])) if report else None,
             "report": report is not None,
         }
+        if refused:
+            run["refused"] = refused
         return report or {"tests": []}, run
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -273,6 +321,8 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         f"on base {base_sha[:7]}",
     )
     errors = []
+    for r in (run or {}).get("refused", []) + base_collect.get("refused", []):
+        errors.append(f"refused test path {r['path']!r}: {r['reason']}")
     if files and not run["report"]:
         errors.append(f"the base run wrote no report (pytest exit code {run['rc']})")
     if head.get("head_sha") and head["head_sha"] != head_sha:
