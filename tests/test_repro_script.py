@@ -401,6 +401,8 @@ def test_the_base_run_does_not_write_through_a_symlink_out_of_the_repository(tmp
     assert files == ["tests/linked/test_x.py"]
     report, run = repro.run_on_base(root, base, head, files)
     assert not (outside / "test_x.py").exists()
+    assert report["tests"] == []  # no path left: pytest must not run the whole base suite
+    assert run["rc"] is None
     assert run["refused"] == [
         {"path": "tests/linked/test_x.py", "reason": "resolves outside the repository"}
     ]
