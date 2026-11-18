@@ -151,6 +151,9 @@ def run_base_copies(root: Path, base_sha: str, head_sha: str, modules: list[str]
                 "pytest",
                 "-q",
                 "--continue-on-collection-errors",
+                # The same marker selection as the CI report step, so a bench test runs too.
+                "-m",
+                "bench or not bench",
                 f"--ci-report={out}",
                 "--",
                 *modules,
