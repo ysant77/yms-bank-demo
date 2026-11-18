@@ -215,3 +215,33 @@ def test_a_parametrized_test_takes_the_worst_outcome_of_its_parameters():
         )
         == "not_run"
     )
+
+
+def test_a_bench_test_runs_as_in_the_ci_report_step(tmp_path):
+    # Found on benchmark case B28: the CI report step runs with -m "bench or not bench", so a
+    # pinned bench test must run too, not show as not_run.
+    config = (
+        '[tool.pytest.ini_options]\naddopts = ["-p", "bank.testing.ci_report", "--strict-markers",'
+        ' "-m", "not bench"]\nmarkers = ["bench: benchmarks"]\n'
+    )
+    bench = (
+        "import pytest\n\n\n@pytest.mark.bench\ndef test_speed():\n    assert True\n\n\n"
+        "def test_plain():\n    assert True\n"
+    )
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q", "-b", "main")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "t")
+    for name, text in {**BASE, "pyproject.toml": config, "tests/test_bench.py": bench}.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text, encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    (root / "tests/test_bench.py").write_text(bench + "\n\ndef test_new():\n    assert True\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "head")
+    head = _git(root, "rev-parse", "HEAD")
+    rows, _ = _run(tmp_path, root, base, head)
+    assert rows["test_speed"]["outcome"] == "passed"
