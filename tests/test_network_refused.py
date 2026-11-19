@@ -58,7 +58,7 @@ def test_the_guard_decides_by_address():
     from conftest import is_loopback
 
     allowed = ["127.0.0.1", "127.8.9.10", "::1", "localhost", "LOCALHOST", None, ""]
-    refused = ["192.0.2.1", "10.0.0.1", "0.0.0.0", "::", "2001:db8::1", "example.invalid"]
+    refused = ["192.0.2.1", "10.0.0.1", "0.0.0.0", "::", "2001:db8::1", "example.invalid"]  # noqa: S104 a string the guard must refuse, never bound
     for host in allowed:
         assert is_loopback(host), host
     for host in refused:
