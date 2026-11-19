@@ -10,13 +10,22 @@ Hash rule, the same in the app (``reportHash`` in src/verifier/report.js): sha25
 text with trailing spaces, tabs, CR and LF removed. Both test suites check the same vector.
 """
 
+import importlib.util
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-from tests.test_ci_workflow import CI, jobs
+# The workflow helpers of tests/test_ci_workflow.py, loaded by path: CI runs pytest without the
+# repository root on sys.path, so "from tests..." does not import there.
+_spec = importlib.util.spec_from_file_location(
+    "ci_workflow_rules", Path(__file__).with_name("test_ci_workflow.py")
+)
+_rules = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_rules)
+CI, jobs = _rules.CI, _rules.jobs
 
 # The shared test vector (also in the app's test/report-provenance.test.js).
 VECTOR_TEXT = '{"schema": "aat-ci-report/2", "head_sha": "abc"}\n\n \t\r\n'
