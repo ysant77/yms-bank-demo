@@ -42,11 +42,13 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
 # The fraud tests skip at import time when the fraud extra is not installed.
 "tests/test_fraud_*.py" = ["E402"]
+# pytest reports a failed test through `assert` (S101). Only this rule, only in tests/.
+"tests/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -100,8 +100,12 @@ def test_changed_lines_excluded_from_coverage_are_reported():
 
 
 def _git(root, *args):
-    return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 

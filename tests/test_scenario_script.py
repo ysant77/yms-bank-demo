@@ -84,12 +84,18 @@ def test_every_scenario_file_validates(name):
 
 def test_bad_arguments_return_2_without_touching_git(capsys):
     before = subprocess.run(
-        ["git", "branch", "--list"], cwd=scenario.ROOT, capture_output=True, text=True
+        ["git", "branch", "--list"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=scenario.ROOT,
+        capture_output=True,
+        text=True,
     ).stdout
     assert scenario.main(["attempt", "S01", "v1", "--key", "BANK.3"]) == 2
     assert scenario.main(["attempt", "S01", "v1", "--key", "BANK-3", "--author", "live"]) == 2
     after = subprocess.run(
-        ["git", "branch", "--list"], cwd=scenario.ROOT, capture_output=True, text=True
+        ["git", "branch", "--list"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=scenario.ROOT,
+        capture_output=True,
+        text=True,
     ).stdout
     assert before == after
     assert "refused" in capsys.readouterr().err
@@ -97,8 +103,8 @@ def test_bad_arguments_return_2_without_touching_git(capsys):
 
 def test_clean_ref_is_the_parent_of_the_seed_commit(tmp_path, monkeypatch):
     def git(*args):
-        return subprocess.run(
-            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
             cwd=tmp_path, check=True, capture_output=True, text=True,
         ).stdout.strip()  # fmt: skip
 
@@ -165,8 +171,12 @@ steps = [ { restore = "notes.txt" } ]
 
 
 def git(repo, *args, check=True):
-    return subprocess.run(
-        ["git", *args], cwd=repo, check=check, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=repo,
+        check=check,
+        capture_output=True,
+        text=True,
     ).stdout
 
 
@@ -606,15 +616,20 @@ def outside_commit(repo, branch, text):
     """A commit made on ``branch`` by someone else (one file added), without any worktree."""
     tip = git(repo, "rev-parse", f"refs/heads/{branch}").strip()
     blob = subprocess.run(
-        ["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text, text=True,
+        ["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text, text=True,  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
         capture_output=True, check=True,
     ).stdout.strip()  # fmt: skip
     index = {**os.environ, "GIT_INDEX_FILE": str(repo / ".git" / "outside-index")}
     entry = f"100644,{blob},outside.txt"
     for args in (["read-tree", tip], ["update-index", "--add", "--cacheinfo", entry]):
-        subprocess.run(["git", *args], cwd=repo, env=index, check=True, capture_output=True)
+        subprocess.run(["git", *args], cwd=repo, env=index, check=True, capture_output=True)  # noqa: S603, S607 fixed git argument list, no shell; git from the runner PATH
     tree = subprocess.run(
-        ["git", "write-tree"], cwd=repo, env=index, text=True, capture_output=True, check=True
+        ["git", "write-tree"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=repo,
+        env=index,
+        text=True,
+        capture_output=True,
+        check=True,
     ).stdout.strip()
     (repo / ".git" / "outside-index").unlink()
     new = git(repo, "commit-tree", tree, "-p", tip, "-m", "other run").strip()
@@ -994,7 +1009,7 @@ def _ssh_git_would_run(repo, environment, tmp_path):
     if run_env.get("GIT_SSH"):
         run_env["GIT_SSH"] = str(fake)
     subprocess.run(
-        ["git", "ls-remote", "ssh://git@example.invalid/repo.git"],
+        ["git", "ls-remote", "ssh://git@example.invalid/repo.git"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
         cwd=repo, env=run_env, text=True, capture_output=True,
     )  # fmt: skip
     return log.read_text().strip() if log.exists() else ""
