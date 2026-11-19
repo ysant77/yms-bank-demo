@@ -32,8 +32,11 @@ def test_a_rendered_fraud_template_runs_beside_the_model_test(scenario, tmp_path
         src = tmp_path / "src"
         shutil.copytree(ROOT / "src", src, ignore=shutil.ignore_patterns("__pycache__"))
         patch = (ROOT / "seeds" / f"{seed}.patch").read_text(encoding="utf-8")
-        subprocess.run(
-            ["patch", "-s", "-p1", "-d", str(tmp_path)], input=patch, text=True, check=True
+        subprocess.run(  # noqa: S603 fixed patch argument list, no shell; patch from the runner PATH
+            ["patch", "-s", "-p1", "-d", str(tmp_path)],  # noqa: S607 fixed patch argument list, no shell; patch from the runner PATH
+            input=patch,
+            text=True,
+            check=True,
         )
         env["PYTHONPATH"] = str(src)
     key = f"BANK-{scenario[1:]}"
@@ -43,7 +46,7 @@ def test_a_rendered_fraud_template_runs_beside_the_model_test(scenario, tmp_path
     rendered = source.replace("{KEY}", key).replace("{TOKEN}", key.replace("-", ""))
     (copy / name).write_text(rendered, encoding="utf-8")
     report = tmp_path / "report.json"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "-c", str(ROOT / "pyproject.toml"), "--rootdir", str(ROOT),
          f"--ci-report={report}", str(copy / "test_fraud_model.py"), str(copy / name)],

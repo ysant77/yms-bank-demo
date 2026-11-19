@@ -55,8 +55,12 @@ TEST_PATH = re.compile(r"tests/(?:[\w][\w.-]*/)*test_[\w.-]*\.py")
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
 
 
@@ -203,7 +207,7 @@ def collect_base_ids(root: Path, base_sha: str, paths: list[str]) -> tuple[list[
             return [], {"rc": None, "modules_without_ids": [], "refused": refused}
         env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
         env.update(PYTHONPATH="src")
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 runs the PR's tests by design, in the read-only test job; no shell
             [
                 sys.executable,
                 "-m",
@@ -253,14 +257,17 @@ def run_on_base(root: Path, base_sha: str, head_sha: str, files: list[str]) -> t
             target = tree / f
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(
-                subprocess.run(
-                    ["git", "show", f"{head_sha}:{f}"], cwd=root, check=True, capture_output=True
+                subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+                    ["git", "show", f"{head_sha}:{f}"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
                 ).stdout
             )
         out = work / "base-report.json"
         env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
         env.update(PYTHONPATH="src", CI_HEAD_SHA=base_sha, CI_BASE_SHA=base_sha)
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 runs the PR's tests by design, in the read-only test job; no shell
             [
                 sys.executable,
                 "-m",

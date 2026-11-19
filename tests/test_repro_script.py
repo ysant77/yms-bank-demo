@@ -66,8 +66,12 @@ PYPROJECT = '[tool.pytest.ini_options]\naddopts = ["-p", "bank.testing.ci_report
 
 
 def _git(root, *args):
-    return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 

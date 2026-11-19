@@ -83,7 +83,7 @@ def test_the_report_jobs_upload_one_marker_and_run_no_repository_code():
 def test_the_hash_step_follows_the_shared_rule(job, tmp_path):
     report = tmp_path / "ci-report.json"
     report.write_bytes(VECTOR_TEXT.encode("utf-8"))
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
         [sys.executable, "-c", hash_command(CI, job), str(report)],
         check=True,
         capture_output=True,
@@ -92,7 +92,7 @@ def test_the_hash_step_follows_the_shared_rule(job, tmp_path):
     assert out.stdout.strip() == VECTOR_HASH
     # The comment adds a blank line after the file; the hash does not change.
     report.write_bytes((VECTOR_TEXT.rstrip(" \t\r\n") + "\n").encode("utf-8"))
-    again = subprocess.run(
+    again = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
         [sys.executable, "-c", hash_command(CI, job), str(report)],
         check=True,
         capture_output=True,

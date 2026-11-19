@@ -130,7 +130,7 @@ def batch_ssh_command(clean: dict[str, str]) -> str | None:
         return None
     if ROOT not in _CORE_SSH:
         found = subprocess.run(
-            ["git", "config", "--get", "core.sshCommand"],
+            ["git", "config", "--get", "core.sshCommand"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
             cwd=ROOT, text=True, capture_output=True, env=clean,
         )  # fmt: skip
         _CORE_SSH[ROOT] = found.stdout.strip() if found.returncode == 0 else ""
@@ -144,7 +144,7 @@ def here() -> Path:
 
 def git(*args: str) -> subprocess.CompletedProcess[str]:
     """A git command that may fail; the caller checks the return code."""
-    return subprocess.run(["git", *args], cwd=here(), text=True, capture_output=True, env=env())
+    return subprocess.run(["git", *args], cwd=here(), text=True, capture_output=True, env=env())  # noqa: S603, S607 fixed git argument list, no shell; git from the runner PATH
 
 
 # The command that is running now, so a repeated stop signal can end it (signals_deferred).
@@ -156,7 +156,7 @@ def spawn(args: list[str] | tuple[str, ...], cwd: Path) -> subprocess.CompletedP
     gets its own process group, so the script decides when it stops, and a stop reaches the hooks
     it started too (a hook that still holds the output pipes would otherwise keep us waiting)."""
     global CHILD
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603 argument list from this script's own callers, no shell
         args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env(),
         stdin=subprocess.DEVNULL, process_group=0,
     )  # fmt: skip
@@ -623,8 +623,8 @@ def check_leftovers(branch: str) -> None:
         if not own_temp_tree(path):
             continue
         if not Path(path).exists():
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", path],
+            subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+                ["git", "worktree", "remove", "--force", path],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
                 cwd=ROOT, capture_output=True, env=env(),
             )  # fmt: skip
             continue
