@@ -142,3 +142,100 @@ def test_the_builder_refuses_a_wrong_start(tmp_path):
     tree = copy_of_tree(tmp_path / "c")
     assert build(tree).returncode == 0
     assert build(tree).returncode == 2
+
+
+# Set 2 (discovery protocol 2): two defects of other kinds, built with ``--set 2`` on
+# investigate/symptoms-2. The statement drops its end day (a date bound), and the statement route
+# loads any account without the owner check (a missing access check). The race test and the Send
+# button CSS check stay: set 2 has neither defect.
+LABELS_2 = [
+    "seeds/",
+    "k8_statement",
+    "statement_end_day",
+    "statement_access",
+    "known defect",
+    "scenarios/",
+    "scenario.py",
+    "test_statement_end_date_is_inclusive",
+    "test_every_account_route_checks_the_owner",
+    "inclusive statement end-date test",
+    "build_discovery_branch",
+]
+GONE_2 = [
+    "seeds",
+    "scenarios",
+    "scripts/scenario.py",
+    "scripts/build_discovery_branch.py",
+    "tests/test_scenario_script.py",
+    "tests/test_scenario_templates.py",
+    "tests/test_discovery_branch.py",
+]
+
+
+def build_2(tree: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
+        [sys.executable, str(BUILDER), "--set", "2", str(tree)], capture_output=True, text=True
+    )
+
+
+@pytest.fixture(scope="module")
+def built_2(tmp_path_factory):
+    tree = copy_of_tree(tmp_path_factory.mktemp("discovery-2"), branch="investigate/symptoms-2")
+    result = build_2(tree)
+    assert result.returncode == 0, result.stdout + result.stderr
+    return tree
+
+
+def test_set_2_has_no_answer_key(built_2):
+    tracked = git(built_2, "ls-files").splitlines()
+    for gone in GONE_2:
+        assert not any(t == gone or t.startswith(gone + "/") for t in tracked), gone
+    hits = []
+    for name in tracked:
+        text = (built_2 / name).read_text(encoding="utf-8", errors="replace").lower()
+        hits += [f"{name}: {label}" for label in LABELS_2 if label.lower() in text]
+    assert hits == []
+
+
+def test_set_2_defects_are_ordinary_commits_and_set_1_is_absent(built_2):
+    log = git(built_2, "log", "--format=%s", "main..HEAD").splitlines()
+    assert len(log) == 3, log
+    for subject in log:
+        assert not any(w in subject.lower() for w in ["defect", "seed", "bug", "owner", "end day"])
+    ledger = (built_2 / "src/bank/ledger.py").read_text(encoding="utf-8")
+    assert "lower, upper = start.isoformat(), end.isoformat()" in ledger
+    assert "time.sleep(0.01)" not in ledger
+    api = (built_2 / "src/bank/api.py").read_text(encoding="utf-8")
+    route = api.split("def read_statement(")[1].split("for value in (start, end):")[0]
+    assert "account = ledger.get_account(conn, account_id)" in route
+    assert "OwnedAccount" not in route and "customer_id !=" not in route
+    css = (built_2 / "src/bank/web/app.css").read_text(encoding="utf-8")
+    assert "#send-button { display: none; }" not in css
+    assert (built_2 / "tests/test_concurrency.py").exists()
+    assert "test_send_button_not_hidden_at_or_below_430px" in (
+        built_2 / "tests/test_web.py"
+    ).read_text(encoding="utf-8")
+
+
+def test_set_2_branch_passes_lint_and_collects(built_2):
+    for args in (["ruff", "check", "."], ["ruff", "format", "--check", "."]):
+        result = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
+            [sys.executable, "-m", *args], cwd=built_2, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+    result = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        cwd=built_2,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+
+
+def test_the_builder_refuses_an_unknown_set(tmp_path):
+    tree = copy_of_tree(tmp_path / "x", branch="investigate/symptoms-3")
+    result = subprocess.run(  # noqa: S603 the running Python with a fixed argument list, no shell
+        [sys.executable, str(BUILDER), "--set", "3", str(tree)], capture_output=True, text=True
+    )
+    assert result.returncode == 2
+    assert result.stdout.startswith("refused:")
