@@ -90,8 +90,12 @@ def test_every_import_on_this_branch_is_known():
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
     locked = ig.locked_import_names(lock, importlib.metadata.packages_distributions())
     unknown = []
-    files = subprocess.run(  # noqa: S603, S607 fixed git argument list, no shell
-        ["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True, check=True
+    files = subprocess.run(  # noqa: S603 fixed git argument list, no shell
+        ["git", "ls-files", "*.py"],  # noqa: S607 git from the runner PATH
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.split()
     for name in files:
         text = (ROOT / name).read_text(encoding="utf-8")
@@ -103,8 +107,12 @@ def test_every_import_on_this_branch_is_known():
 
 
 def _git(root, *args):
-    return subprocess.run(  # noqa: S603, S607 fixed git argument list, no shell
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell
+        ["git", *args],  # noqa: S607 git from the runner PATH
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 
