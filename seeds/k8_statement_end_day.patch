@@ -1,0 +1,17 @@
+diff --git a/src/bank/ledger.py b/src/bank/ledger.py
+index 1a7cae4..8e2014b 100644
+--- a/src/bank/ledger.py
++++ b/src/bank/ledger.py
+@@ -399,11 +399,7 @@ def statement(conn: sqlite3.Connection, account_id: int, start: date, end: date)
+     if start > end:
+         raise LedgerError("statement start is after its end")
+     account = get_account(conn, account_id)
+-    try:
+-        upper = (end + timedelta(days=1)).isoformat()
+-    except OverflowError:
+-        raise LedgerError("statement end is out of range") from None
+-    lower = start.isoformat()
++    lower, upper = start.isoformat(), end.isoformat()
+     (opening,) = conn.execute(
+         "SELECT COALESCE(SUM(l.amount_minor), 0) FROM journal_lines l"
+         " JOIN journal_entries e ON e.id = l.entry_id"

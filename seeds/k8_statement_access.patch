@@ -1,0 +1,22 @@
+diff --git a/src/bank/api.py b/src/bank/api.py
+index 26ad526..fff2ddc 100644
+--- a/src/bank/api.py
++++ b/src/bank/api.py
+@@ -168,11 +168,16 @@ def create_app(db_path: str | Path | None = None, *, seed_if_empty: bool = True)
+ 
+     @app.get("/api/accounts/{account_id}/statement")
+     def read_statement(
+-        account: OwnedAccount,
++        account_id: int,
++        customer_id: CustomerId,
+         conn: Conn,
+         start: Annotated[date | None, Query(alias="from")] = None,
+         end: Annotated[date | None, Query(alias="to")] = None,
+     ) -> dict[str, object]:
++        try:
++            account = ledger.get_account(conn, account_id)
++        except ledger.NotFound:
++            raise HTTPException(404, "account not found") from None
+         for value in (start, end):
+             if value is not None and not EARLIEST_DATE <= value <= LATEST_DATE:
+                 raise HTTPException(400, f"dates must be between {EARLIEST_DATE} and {LATEST_DATE}")
