@@ -73,6 +73,17 @@ jobs:
           args=(--coverage coverage.json --head-report ci-report.json)
           if [ -n "$BASE_SHA" ]; then args+=(--base "$BASE_SHA" --base-report main.json); fi
           uv run python scripts/changed_coverage.py "${args[@]}"
+      # Imports added by the pull request, compared with the standard library, this repository
+      # and uv.lock. The block lists them; the verifier decides.
+      - name: Imports added by the pull request
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          args=(--head-report ci-report.json)
+          if [ -n "$BASE_SHA" ]; then args+=(--base "$BASE_SHA" --head "$HEAD_SHA"); fi
+          uv run python scripts/import_guard.py "${args[@]}"
       - name: Upload CI report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
