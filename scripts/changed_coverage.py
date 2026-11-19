@@ -32,8 +32,12 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 def git(*args: str, cwd: Path = ROOT) -> str:
     # Paths are passed literally, never as patterns.
-    return subprocess.run(
-        ["git", "--literal-pathspecs", *args], cwd=cwd, check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", "--literal-pathspecs", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
 
 

@@ -144,18 +144,19 @@ def open_account(
 
 
 def get_account(conn: sqlite3.Connection, account_id: int) -> Account:
-    row = conn.execute(f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE id = ?", (account_id,))
+    row = conn.execute(f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE id = ?", (account_id,))  # noqa: S608 columns are the constant ACCOUNT_COLUMNS; values are bound ? parameters
     return _row_to_account(row.fetchone())
 
 
 def get_account_by_number(conn: sqlite3.Connection, number: str) -> Account:
-    row = conn.execute(f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE number = ?", (number,))
+    row = conn.execute(f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE number = ?", (number,))  # noqa: S608 columns are the constant ACCOUNT_COLUMNS; values are bound ? parameters
     return _row_to_account(row.fetchone())
 
 
 def list_accounts(conn: sqlite3.Connection, customer_id: int) -> list[Account]:
     rows = conn.execute(
-        f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE customer_id = ? ORDER BY id", (customer_id,)
+        f"SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE customer_id = ? ORDER BY id",  # noqa: S608 columns are the constant ACCOUNT_COLUMNS; values are bound ? parameters
+        (customer_id,),
     )
     return [_row_to_account(row) for row in rows]
 

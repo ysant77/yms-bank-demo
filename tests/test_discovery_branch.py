@@ -48,7 +48,7 @@ GONE = [
 
 
 def git(cwd: Path, *args: str) -> str:
-    out = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    out = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607 fixed git argument list, no shell; git from the runner PATH
     return out.stdout
 
 
@@ -72,7 +72,7 @@ def copy_of_tree(dest: Path, branch: str = "investigate/symptoms") -> Path:
 
 
 def build(tree: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(BUILDER), str(tree)], capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(BUILDER), str(tree)], capture_output=True, text=True)  # noqa: S603 the running Python with a fixed argument list, no shell
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_both_defects_are_ordinary_commits(built):
 def test_the_branch_passes_lint(built):
     for args in (["check", "."], ["format", "--check", "."]):
         command = [sys.executable, "-m", "ruff", *args]
-        result = subprocess.run(command, cwd=built, capture_output=True, text=True)
+        result = subprocess.run(command, cwd=built, capture_output=True, text=True)  # noqa: S603 the running Python with a fixed argument list, no shell
         assert result.returncode == 0, result.stdout + result.stderr
 
 
