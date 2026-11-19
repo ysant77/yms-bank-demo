@@ -112,8 +112,8 @@ def workflow_hashes(root: Path) -> dict[str, str]:
 
 def git_sha(root: Path, ref: str) -> str | None:
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+        out = subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
             cwd=root,
             capture_output=True,
             text=True,

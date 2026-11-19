@@ -52,7 +52,7 @@ def test_concurrent_withdrawals_from_separate_processes_never_overdraw(tmp_path)
     # Every process waits until the same wall-clock moment, after all of them have started.
     start = time.time() + 2.0
     procs = [
-        subprocess.Popen(
+        subprocess.Popen(  # noqa: S603 the running Python with a fixed argument list, no shell
             [sys.executable, "-c", CHILD, str(path), str(account.id), repr(start)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

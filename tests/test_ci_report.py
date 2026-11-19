@@ -131,8 +131,12 @@ def test_shas_fall_back_to_git(project, monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
     def git(*args):
-        return subprocess.run(
-            ["git", *args], cwd=project.path, check=True, capture_output=True, text=True
+        return subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+            ["git", *args],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+            cwd=project.path,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
 
     git("init", "-q", "-b", "main")

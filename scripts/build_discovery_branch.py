@@ -87,7 +87,7 @@ class Refused(Exception):
 
 
 def git(tree: Path, *args: str, stdin: str | None = None) -> str:
-    out = subprocess.run(["git", *args], cwd=tree, input=stdin, capture_output=True, text=True)
+    out = subprocess.run(["git", *args], cwd=tree, input=stdin, capture_output=True, text=True)  # noqa: S603, S607 fixed git argument list, no shell; git from the runner PATH
     if out.returncode != 0:
         raise Refused(f"git {' '.join(args[:2])}: {out.stderr.strip()}")
     return out.stdout
@@ -119,7 +119,7 @@ def tidy(tree: Path, files: list[str]) -> None:
     """Drop imports that the removal left unused, and format the changed files."""
     for args in (["check", "--fix", "--select", "F401", *files], ["format", *files]):
         command = [sys.executable, "-m", "ruff", *args]
-        out = subprocess.run(command, cwd=tree, capture_output=True, text=True)
+        out = subprocess.run(command, cwd=tree, capture_output=True, text=True)  # noqa: S603 the running Python with a fixed argument list, no shell
         if out.returncode != 0:
             raise Refused(f"ruff {args[0]}: {out.stdout.strip()} {out.stderr.strip()}")
 

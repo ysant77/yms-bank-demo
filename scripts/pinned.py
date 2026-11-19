@@ -100,8 +100,12 @@ def entries(
 
 
 def _show(root: Path, sha: str, path: str) -> str | None:
-    proc = subprocess.run(
-        ["git", "show", f"{sha}:{path}"], cwd=root, check=False, capture_output=True, text=True
+    proc = subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+        ["git", "show", f"{sha}:{path}"],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
     )
     return proc.stdout if proc.returncode == 0 else None
 
@@ -113,14 +117,14 @@ def run_base_copies(root: Path, base_sha: str, head_sha: str, modules: list[str]
     work = Path(tempfile.mkdtemp())
     tree = work / root.name
     try:
-        subprocess.run(
-            ["git", "clone", "--quiet", "--shared", "--no-checkout", str(root), str(tree)],
+        subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+            ["git", "clone", "--quiet", "--shared", "--no-checkout", str(root), str(tree)],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
             cwd=work,
             check=True,
             capture_output=True,
         )
-        subprocess.run(
-            ["git", "checkout", "--quiet", "--detach", head_sha],
+        subprocess.run(  # noqa: S603 fixed git argument list, no shell; git from the runner PATH
+            ["git", "checkout", "--quiet", "--detach", head_sha],  # noqa: S607 fixed git argument list, no shell; git from the runner PATH
             cwd=tree,
             check=True,
             capture_output=True,
@@ -144,7 +148,7 @@ def run_base_copies(root: Path, base_sha: str, head_sha: str, modules: list[str]
         out = work / "pinned-report.json"
         env = {k: v for k, v in os.environ.items() if k not in SCRIPT_VARS}
         env.update(PYTHONPATH="src", CI_HEAD_SHA=head_sha, CI_BASE_SHA=base_sha)
-        subprocess.run(
+        subprocess.run(  # noqa: S603 runs the PR's tests by design, in the read-only test job; no shell
             [
                 sys.executable,
                 "-m",
