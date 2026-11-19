@@ -69,7 +69,7 @@ def build(
     """
     if ledger.list_customers(conn):
         raise ValueError("database already has customers")
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 seeded generator for repeatable demo data, never a secret
     now = now or datetime.now(UTC)
     # History ends yesterday by default, so no entry is dated in the future.
     end = end or (now.date() - timedelta(days=1))
