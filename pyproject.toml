@@ -20,6 +20,7 @@ fraud = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "hypothesis>=6",
     "pip-audit==2.9.0",
     "pytest>=8",
     "pytest-cov>=6",
