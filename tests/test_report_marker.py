@@ -13,7 +13,6 @@ text with trailing spaces, tabs, CR and LF removed. Both test suites check the s
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -45,7 +44,9 @@ def marker_errors(text: str) -> list[str]:
             f"          name: {prefix}${{{{ steps.hash.outputs.sha256 }}}}"
             f"-attempt-${{{{ github.run_attempt }}}}\n"
         )
-        uploads = [s for s in steps(block) if s.startswith("uses: actions/upload-artifact@") and name_line in s]
+        uploads = [
+            s for s in steps(block) if "uses: actions/upload-artifact@" in s and name_line in s
+        ]
         if len(uploads) != 1 or "          path: ci-report.json\n" not in uploads[0]:
             errors.append(f"{name} does not upload one {prefix}<hash> marker of ci-report.json")
     # No other job may upload a marker: the jobs that run repository code must not.
@@ -57,7 +58,9 @@ def marker_errors(text: str) -> list[str]:
 
 def hash_command(text: str, job: str) -> str:
     """The python3 command of the job's hash step (the shared hash rule)."""
-    step = next(s for s in steps(jobs(text)[job]) if re.search(r"^        id: hash$", s, flags=re.M))
+    step = next(
+        s for s in steps(jobs(text)[job]) if re.search(r"^        id: hash$", s, flags=re.M)
+    )
     m = re.search(r"python3 -c '([^']*)'", step)
     assert m, "the hash step runs python3 -c '...'"
     return m.group(1)
@@ -73,14 +76,18 @@ def test_the_hash_step_follows_the_shared_rule(job, tmp_path):
     report.write_bytes(VECTOR_TEXT.encode("utf-8"))
     out = subprocess.run(
         [sys.executable, "-c", hash_command(CI, job), str(report)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     assert out.stdout.strip() == VECTOR_HASH
     # The comment adds a blank line after the file; the hash does not change.
     report.write_bytes((VECTOR_TEXT.rstrip(" \t\r\n") + "\n").encode("utf-8"))
     again = subprocess.run(
         [sys.executable, "-c", hash_command(CI, job), str(report)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     assert again.stdout.strip() == VECTOR_HASH
 
@@ -101,7 +108,9 @@ def test_the_rule_fails_when_a_marker_control_is_removed(job, old, new):
 
 def test_the_rule_fails_when_a_report_job_runs_repository_code():
     block = jobs(CI)["report"]
-    changed = block.replace("    steps:\n", "    steps:\n      - uses: actions/checkout@" + "0" * 40 + "\n", 1)
+    changed = block.replace(
+        "    steps:\n", "    steps:\n      - uses: actions/checkout@" + "0" * 40 + "\n", 1
+    )
     assert marker_errors(CI.replace(block, changed, 1)) != []
 
 
