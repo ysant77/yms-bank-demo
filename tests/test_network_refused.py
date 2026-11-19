@@ -17,12 +17,14 @@ REFUSED = "non-loopback network access is refused in tests"
 
 def test_a_connection_to_another_machine_is_refused():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(2)  # without the guard the test fails in 2 s, not after a long wait
         with pytest.raises(RuntimeError, match=REFUSED):
             s.connect(("192.0.2.1", 80))  # TEST-NET-1: never a real host
 
 
 def test_connect_ex_does_not_hide_the_refusal():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(2)  # without the guard the test fails in 2 s, not after a long wait
         with pytest.raises(RuntimeError, match=REFUSED):
             s.connect_ex(("192.0.2.1", 80))
 
