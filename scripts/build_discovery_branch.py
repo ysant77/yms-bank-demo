@@ -60,19 +60,24 @@ EDITS = [
     ("README.md", "| `seeds/` | Patches that add known defects for verifier scenarios. |\n", ""),
     (
         "README.md",
-        "The default run includes a 20-thread withdrawal race test, an inclusive statement end-date\n"
-        "test, a test that walks every `/api/accounts/...` route to check the owner rule, and a CSS\n"
-        "check that the Send button stays visible at 430 px and below.\n",
-        "The default run includes an inclusive statement end-date test and a test that walks every\n"
-        "`/api/accounts/...` route to check the owner rule.\n",
+        "The default run includes a 20-thread withdrawal race test, an inclusive statement "
+        "end-date\ntest, a test that walks every `/api/accounts/...` route to check the owner "
+        "rule, and a CSS\ncheck that the Send button stays visible at 430 px and below.\n",
+        "The default run includes an inclusive statement end-date test and a test that walks "
+        "every\n`/api/accounts/...` route to check the owner rule.\n",
     ),
     (
         "README.md",
-        "## Seeds\n\nKnown defects live as patches in `seeds/`, never on `main`. See [seeds/README.md](seeds/README.md)\n"
+        "## Seeds\n\nKnown defects live as patches in `seeds/`, never on `main`. "
+        "See [seeds/README.md](seeds/README.md)\n"
         "for what each seed does and which scenarios use it.\n\n",
         "",
     ),
-    ("src/fraud/data.py", "  # about 290 holdout frauds: see seeds/README.md for the margins", "  # about 290 holdout frauds"),
+    (
+        "src/fraud/data.py",
+        "  # about 290 holdout frauds: see seeds/README.md for the margins",
+        "  # about 290 holdout frauds",
+    ),
     ("tests/test_fraud_model.py", " See seeds/README.md for the measurements.", ""),
 ]
 
@@ -113,7 +118,8 @@ def remove_defs(path: Path, names: list[str]) -> None:
 def tidy(tree: Path, files: list[str]) -> None:
     """Drop imports that the removal left unused, and format the changed files."""
     for args in (["check", "--fix", "--select", "F401", *files], ["format", *files]):
-        out = subprocess.run([sys.executable, "-m", "ruff", *args], cwd=tree, capture_output=True, text=True)
+        command = [sys.executable, "-m", "ruff", *args]
+        out = subprocess.run(command, cwd=tree, capture_output=True, text=True)
         if out.returncode != 0:
             raise Refused(f"ruff {args[0]}: {out.stdout.strip()} {out.stderr.strip()}")
 

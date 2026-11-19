@@ -102,7 +102,8 @@ def test_both_defects_are_ordinary_commits(built):
     log = git(built, "log", "--format=%s", "main..HEAD").splitlines()
     assert len(log) == 3, log
     for subject in log:
-        assert not any(label.lower() in subject.lower() for label in LABELS + ["defect", "seed", "bug"])
+        words = LABELS + ["defect", "seed", "bug"]
+        assert not any(label.lower() in subject.lower() for label in words)
     ledger = (built / "src/bank/ledger.py").read_text(encoding="utf-8")
     assert "time.sleep(0.01)" in ledger
     css = (built / "src/bank/web/app.css").read_text(encoding="utf-8")
@@ -114,7 +115,8 @@ def test_both_defects_are_ordinary_commits(built):
 
 def test_the_branch_passes_lint(built):
     for args in (["check", "."], ["format", "--check", "."]):
-        result = subprocess.run([sys.executable, "-m", "ruff", *args], cwd=built, capture_output=True, text=True)
+        command = [sys.executable, "-m", "ruff", *args]
+        result = subprocess.run(command, cwd=built, capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
 
 
