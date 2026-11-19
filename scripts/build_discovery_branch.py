@@ -1,6 +1,6 @@
 """Build the investigation branch for discovery from symptoms (Mode B).
 
-    python scripts/build_discovery_branch.py <work tree>
+    python scripts/build_discovery_branch.py [--set 1|2] <work tree>
 
 The work tree is a clean checkout of this repository (for example a clone of the demo
 repository) on a branch whose name starts with ``investigate/``. The script makes three commits
@@ -12,6 +12,12 @@ there, with the repository's own git identity:
    points to them from the README and two comments.
 2. It applies the withdrawal race as an ordinary change of ``src/bank/ledger.py``.
 3. It applies the hidden Send button as an ordinary change of ``src/bank/web/app.css``.
+
+Set 2 (``--set 2``, branch ``investigate/symptoms-2``) has two defects of other kinds. Step 1
+removes the same kits, but the tests that name the set 2 defects instead of the set 1 ones (the
+statement end-date tests and the owner walk of the account routes). Step 2 makes the statement
+drop its end day (``src/bank/ledger.py``). Step 3 makes the statement route load the account
+without the owner check (``src/bank/api.py``). The set 1 tests stay: set 2 has neither defect.
 
 The patches are read from the work tree's own ``HEAD`` before step 1. Nothing is pushed.
 Exit code 2 and a line starting with ``refused:`` on a wrong start.
@@ -25,47 +31,18 @@ import sys
 from pathlib import Path
 
 BRANCH_PREFIX = "investigate/"
-PATCHES = [
-    ("seeds/k1_race.patch", "refactor(ledger): check the balance before the write transaction"),
-    ("seeds/k1_hidden_button.patch", "style(web): adjust the layout below 430 px"),
-]
-REMOVE = [
+# The kits that every set removes.
+REMOVE_ALL = [
     "seeds",
     "scenarios",
     "scripts/scenario.py",
     "scripts/build_discovery_branch.py",
     "tests/test_scenario_script.py",
     "tests/test_scenario_templates.py",
-    "tests/test_concurrency.py",
-    "tests/test_concurrency_processes.py",
     "tests/test_discovery_branch.py",
 ]
-# Top-level names removed from a file that otherwise stays (the Send button CSS check).
-REMOVE_DEFS = {
-    "tests/test_web.py": [
-        "SMALL_SCREEN_PX",
-        "strip_comments",
-        "css_rules",
-        "to_px",
-        "applies_at_or_below",
-        "send_button_tokens",
-        "targets",
-        "hiding_rules",
-        "test_send_button_not_hidden_at_or_below_430px",
-        "test_css_check_finds_hiding_rules",
-    ],
-}
-# Exact text edits: (file, old, new). Each old text must be present once.
-EDITS = [
+EDITS_ALL = [
     ("README.md", "| `seeds/` | Patches that add known defects for verifier scenarios. |\n", ""),
-    (
-        "README.md",
-        "The default run includes a 20-thread withdrawal race test, an inclusive statement "
-        "end-date\ntest, a test that walks every `/api/accounts/...` route to check the owner "
-        "rule, and a CSS\ncheck that the Send button stays visible at 430 px and below.\n",
-        "The default run includes an inclusive statement end-date test and a test that walks "
-        "every\n`/api/accounts/...` route to check the owner rule.\n",
-    ),
     (
         "README.md",
         "## Seeds\n\nKnown defects live as patches in `seeds/`, never on `main`. "
@@ -80,6 +57,64 @@ EDITS = [
     ),
     ("tests/test_fraud_model.py", " See seeds/README.md for the measurements.", ""),
 ]
+DEFAULT_RUN = (
+    "The default run includes a 20-thread withdrawal race test, an inclusive statement "
+    "end-date\ntest, a test that walks every `/api/accounts/...` route to check the owner "
+    "rule, and a CSS\ncheck that the Send button stays visible at 430 px and below.\n"
+)
+SETS = {
+    "1": {
+        "patches": [
+            (
+                "seeds/k1_race.patch",
+                "refactor(ledger): check the balance before the write transaction",
+            ),
+            ("seeds/k1_hidden_button.patch", "style(web): adjust the layout below 430 px"),
+        ],
+        "remove": ["tests/test_concurrency.py", "tests/test_concurrency_processes.py"],
+        # Top-level names removed from a file that otherwise stays (the Send button CSS check).
+        "remove_defs": {
+            "tests/test_web.py": [
+                "SMALL_SCREEN_PX",
+                "strip_comments",
+                "css_rules",
+                "to_px",
+                "applies_at_or_below",
+                "send_button_tokens",
+                "targets",
+                "hiding_rules",
+                "test_send_button_not_hidden_at_or_below_430px",
+                "test_css_check_finds_hiding_rules",
+            ],
+        },
+        "default_run": (
+            "The default run includes an inclusive statement end-date test and a test that walks "
+            "every\n`/api/accounts/...` route to check the owner rule.\n"
+        ),
+    },
+    "2": {
+        "patches": [
+            ("seeds/k8_statement_end_day.patch", "refactor(ledger): simplify the statement bounds"),
+            (
+                "seeds/k8_statement_access.patch",
+                "refactor(api): load the statement account in the route",
+            ),
+        ],
+        "remove": [],
+        "remove_defs": {
+            "tests/test_api.py": [
+                "account_routes",
+                "test_every_account_route_checks_the_owner",
+                "test_statement_end_date_is_inclusive",
+            ],
+            "tests/test_ledger.py": ["test_statement_end_date_is_inclusive"],
+        },
+        "default_run": (
+            "The default run includes a 20-thread withdrawal race test and a CSS check that the "
+            "Send\nbutton stays visible at 430 px and below.\n"
+        ),
+    },
+}
 
 
 class Refused(Exception):
@@ -124,7 +159,10 @@ def tidy(tree: Path, files: list[str]) -> None:
             raise Refused(f"ruff {args[0]}: {out.stdout.strip()} {out.stderr.strip()}")
 
 
-def build(tree: Path) -> list[str]:
+def build(tree: Path, set_id: str = "1") -> list[str]:
+    if set_id not in SETS:
+        raise Refused(f"unknown set {set_id}; the sets are {', '.join(SETS)}")
+    kit = SETS[set_id]
     if not (tree / ".git").exists():
         raise Refused(f"{tree} is not the root of a git work tree")
     branch = git(tree, "rev-parse", "--abbrev-ref", "HEAD").strip()
@@ -133,22 +171,22 @@ def build(tree: Path) -> list[str]:
     if git(tree, "status", "--porcelain"):
         raise Refused("the work tree has changes; start from a clean checkout")
     patches = []
-    for path, subject in PATCHES:
+    for path, subject in kit["patches"]:
         try:
             patches.append((git(tree, "show", f"HEAD:{path}"), subject))
         except Refused:
             raise Refused(f"HEAD has no {path}; the branch may be built already") from None
 
-    git(tree, "rm", "-r", "-q", "--ignore-unmatch", "--", *REMOVE)
-    for name, defs in REMOVE_DEFS.items():
+    git(tree, "rm", "-r", "-q", "--ignore-unmatch", "--", *REMOVE_ALL, *kit["remove"])
+    for name, defs in kit["remove_defs"].items():
         remove_defs(tree / name, defs)
-    for name, old, new in EDITS:
+    for name, old, new in [*EDITS_ALL, ("README.md", DEFAULT_RUN, kit["default_run"])]:
         path = tree / name
         text = path.read_text(encoding="utf-8")
         if text.count(old) != 1:
             raise Refused(f"{name}: the text to edit is not there once")
         path.write_text(text.replace(old, new), encoding="utf-8")
-    tidy(tree, list(REMOVE_DEFS))
+    tidy(tree, list(kit["remove_defs"]))
     git(tree, "add", "-A")
     git(tree, "commit", "-q", "-m", "chore: remove the development kits from this branch")
     commits = [git(tree, "rev-parse", "HEAD").strip()]
@@ -161,11 +199,14 @@ def build(tree: Path) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    set_id = "1"
+    if len(argv) == 3 and argv[0] == "--set":
+        set_id, argv = argv[1], argv[2:]
     if len(argv) != 1:
-        print("refused: usage: build_discovery_branch.py <work tree>")
+        print("refused: usage: build_discovery_branch.py [--set 1|2] <work tree>")
         return 2
     try:
-        commits = build(Path(argv[0]).resolve())
+        commits = build(Path(argv[0]).resolve(), set_id)
     except Refused as error:
         print(f"refused: {error}")
         return 2

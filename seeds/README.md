@@ -29,6 +29,23 @@ above was run 5 times. The worktree was then removed.
 
 With either seed applied, every other test in the default run still passes.
 
+## K8: discovery set 2
+
+Used only by `scripts/build_discovery_branch.py --set 2`, which applies both as ordinary commits
+on `investigate/symptoms-2`. No scenario uses them.
+
+| Seed | File changed | Defect | Test that catches it |
+| --- | --- | --- | --- |
+| `k8_statement_end_day` | `src/bank/ledger.py` | `statement` compares `posted_at` with the end date itself, not with the day after it, so the entries of the end day are left out (a date bound one day short). | `tests/test_ledger.py::test_statement_end_date_is_inclusive`, `tests/test_api.py::test_statement_end_date_is_inclusive` |
+| `k8_statement_access` | `src/bank/api.py` | The statement route loads the account by id with `ledger.get_account` and keeps the session check, but drops the owner check, so a signed-in customer can read any account's statement (a missing access check). | `tests/test_api.py::test_every_account_route_checks_the_owner` |
+
+### Verification
+
+Each patch was applied with `git apply` in a scratch worktree of this branch's base, and the full
+default run was made (the scenario template test left out). With `k8_statement_end_day` only the
+two end-date tests fail (2 failed, 370 passed). With `k8_statement_access` only the owner walk
+fails (1 failed, 371 passed). The worktrees were then removed.
+
 ## K7: fraud score
 
 The fraud score kit (`src/fraud/`) trains on synthetic transactions only. Both seeds change the
